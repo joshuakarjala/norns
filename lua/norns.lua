@@ -85,6 +85,9 @@ end
 -- midi callbacks (defined in midi.lua)
 norns.midi = {}
 
+-- push2 callbacks (defined in push2.lua)
+norns.push2 = {}
+
 -- osc callbacks (defined in osc.lua)
 norns.osc = {}
 

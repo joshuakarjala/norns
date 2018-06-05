@@ -46,6 +46,11 @@ extern void w_handle_osc_event(char *from_host,
                                char *path,
                                lo_message msg);
 
+extern void w_handle_push2_add(void *dev);
+extern void w_handle_push2_remove(int id);
+
+
+
 //--- audio engine introspection
 extern void w_handle_engine_report(const char **arr, const int num);
 /* extern void w_handle_command_report(const struct engine_command *arr, */
@@ -76,3 +81,6 @@ extern void w_handle_engine_loaded();
 // callbacks for ACK and timeout of sclang startup
 extern void w_handle_startup_ready_ok();
 extern void w_handle_startup_ready_timeout();
+
+
+extern void* luaState();

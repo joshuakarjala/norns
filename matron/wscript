@@ -8,6 +8,7 @@ def build(bld):
         'src/device/device_midi.c',
         'src/device/device_monitor.c',
         'src/device/device_monome.c',
+        'src/device/device_push2.c',
         'src/osc.c',
         'src/hardware/battery.c',
         'src/hardware/gpio.c',
@@ -44,6 +45,7 @@ def build(bld):
             'LIBMONOME',
             'SNDFILE',
             'AVAHI-COMPAT-LIBDNS_SD',
+            'LIBUSB-1.0'
         ], lib=[
             'pthread', 'm'
         ], cflags=['-O3', '-Wall'])

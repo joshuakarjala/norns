@@ -57,6 +57,10 @@ typedef enum {
     EVENT_STARTUP_READY_TIMEOUT,
     // reset the lua state
     EVENT_RESET_LVM,
+    // midi device added
+    EVENT_PUSH2_ADD,
+    // midi device removed
+    EVENT_PUSH2_REMOVE,
     // quit the event loop
     EVENT_QUIT,
 } event_t;
@@ -206,6 +210,18 @@ struct event_startup_ready_timeout {
     struct event_common common;  
 }; // + 0
 
+
+struct event_push2_add {
+    struct event_common common;
+    void *dev;
+}; // +4
+
+struct event_push2_remove {
+    struct event_common common;
+    uint32_t id;
+}; // +4
+
+
 union event_data {
     uint32_t type;
     struct event_exec_code_line exec_code_line;
@@ -230,4 +246,6 @@ union event_data {
     struct event_poll_wave poll_wave;
     struct event_startup_ready_ok startup_ready_ok;
     struct event_startup_ready_timeout startup_ready_timeout;
+    struct event_push2_add push2_add;
+    struct event_push2_remove push2_remove;
 };

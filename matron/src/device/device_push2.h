@@ -1,0 +1,31 @@
+#pragma once
+
+#include <cairo.h>
+#include <libusb.h>
+#include "device_common.h"
+
+#define PUSH2_LINE    2048
+#define PUSH2_HEIGHT  160
+#define PUSH2_WIDTH   960
+#define PUSH2_DATA_PKT_SZ (PUSH2_LINE * PUSH2_WIDTH)
+
+
+struct dev_push2 {
+    struct dev_common dev;
+
+    uint8_t *headerPkt_;
+    unsigned char dataPkt_[PUSH2_DATA_PKT_SZ];
+	unsigned char imgBuf_[PUSH2_DATA_PKT_SZ];
+
+	bool running_;
+    libusb_device_handle *handle_;
+    int iface_;
+    int endpointOut_;
+
+	cairo_surface_t *surface;
+	cairo_t *cr;
+};
+
+extern int dev_push2_init(void *self);
+extern void dev_push2_deinit(void *self);
+extern void* dev_push2_start(void *self);

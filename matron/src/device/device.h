@@ -7,6 +7,7 @@
 #include "device_hid.h"
 #include "device_midi.h"
 #include "device_common.h"
+#include "device_push2.h"
 
 // common data structure for all devices
 union dev {
@@ -14,6 +15,7 @@ union dev {
     struct dev_monome monome;
     struct dev_hid hid;
     struct dev_midi midi;
+    struct dev_push2 push2;
 };
 
 // initialize device registry
