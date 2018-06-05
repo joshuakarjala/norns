@@ -208,7 +208,6 @@ void handle_device(struct udev_device *dev) {
             device_t t = check_dev_type(dev);
 
             if (t >= 0 && t < DEV_POLL_COUNT) {
-                printf("null action : %s\n",get_device_name(dev));
                 dev_list_add(getdevicetype(dev, t) , node, get_device_name(dev));
             }
         }
@@ -221,7 +220,6 @@ void handle_device(struct udev_device *dev) {
 
                 const char* alsa_node = get_alsa_midi_node(dev);
 
-                fprintf(stderr, "sound  : %s\n",get_device_name(dev));
                 if (alsa_node != NULL) {
                     dev_list_add(getdevicetype(dev, DEV_TYPE_MIDI), alsa_node, get_device_name(dev));
                 }

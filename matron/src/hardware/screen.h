@@ -5,6 +5,8 @@
 extern void screen_init(void);
 extern void screen_deinit(void);
 
+extern void screen_cr(void *cr);
+
 extern void screen_update(void);
 extern void screen_font_face(int i);
 extern void screen_font_size(double z);
