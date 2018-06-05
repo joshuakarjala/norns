@@ -11,6 +11,8 @@ typedef enum {
     DEV_TYPE_MIDI = 2,
     // usbmodem (crow)
     DEV_TYPE_CROW = 3,
+    // push2 devices
+    DEV_TYPE_PUSH2 = 4,
     // counter - unused, don't remove
     DEV_TYPE_COUNT,
     DEV_TYPE_INVALID

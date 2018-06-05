@@ -69,6 +69,10 @@ typedef enum {
     EVENT_SYSTEM_CMD,
     // reset the lua state
     EVENT_RESET_LVM,
+    // midi device added
+    EVENT_PUSH2_ADD,
+    // midi device removed
+    EVENT_PUSH2_REMOVE,
     // quit the event loop
     EVENT_QUIT,
     // crow add
@@ -277,6 +281,16 @@ struct event_system_cmd {
     char *capture;
 };
 
+struct event_push2_add {
+    struct event_common common;
+    void *dev;
+}; // +4
+
+struct event_push2_remove {
+    struct event_common common;
+    uint32_t id;
+}; // +4
+
 
 union event_data {
     uint32_t type;
@@ -311,4 +325,6 @@ union event_data {
     struct event_crow_remove crow_remove;
     struct event_crow_event crow_event;
     struct event_system_cmd system_cmd;
+    struct event_push2_add push2_add;
+    struct event_push2_remove push2_remove;
 };

@@ -52,6 +52,10 @@
 //---- global lua state!
 lua_State *lvm;
 
+void* luaState() {
+  return lvm;
+}
+
 void w_run_code(const char *code) {
   l_dostring(lvm, code, "w_run_code");
   fflush(stdout);
@@ -1553,6 +1557,26 @@ void w_handle_midi_event(int id, uint8_t *data, size_t nbytes) {
     l_report(lvm, l_docall(lvm, 2, 0));
 }
 
+void w_handle_push2_add(void *p) {
+  struct dev_push2 *dev = (struct dev_push2 *)p;
+  struct dev_common *base = (struct dev_common *)p;
+  int id = base->id;
+
+  _push_norns_func("push2", "add");
+  lua_pushinteger(lvm, id + 1); // convert to 1-base
+  lua_pushstring(lvm, base->name);
+  lua_pushlightuserdata(lvm, dev);
+  fprintf(stderr, "+w_handle_push2_add call");
+  l_report(lvm, l_docall(lvm, 3, 0));
+  fprintf(stderr, "-w_handle_push2_add call");
+}
+
+void w_handle_push2_remove(int id) {
+  _push_norns_func("push2", "remove");
+  lua_pushinteger(lvm, id + 1); // convert to 1-base
+  l_report(lvm, l_docall(lvm, 1, 0));
+}
+
 void w_handle_osc_event(char *from_host,
                         char *from_port,
                         char *path,
@@ -1629,6 +1653,9 @@ void w_handle_osc_event(char *from_host,
 
   l_report(lvm, l_docall(lvm, 3, 0));
 }
+
+
+
 
 // helper for pushing array of c strings
 static inline void

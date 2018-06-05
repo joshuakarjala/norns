@@ -52,6 +52,11 @@ extern void w_handle_osc_event(char *from_host,
                                char *path,
                                lo_message msg);
 
+extern void w_handle_push2_add(void *dev);
+extern void w_handle_push2_remove(int id);
+
+
+
 //--- audio engine introspection
 extern void w_handle_engine_report(const char **arr, const int num);
 /* extern void w_handle_command_report(const struct engine_command *arr, */
@@ -92,3 +97,5 @@ extern void w_handle_startup_ready_timeout();
 
 // util callbacks
 extern void w_handle_system_cmd();
+
+extern void* luaState();

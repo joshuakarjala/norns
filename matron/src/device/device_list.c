@@ -112,6 +112,10 @@ void dev_list_add(device_t type, const char *path, const char *name) {
         d = dev_new(type, path, name, true, 0);
         ev = post_add_event(d, EVENT_CROW_ADD);
         break;
+    case DEV_TYPE_PUSH2:
+        d = dev_new(type, path, name, true, 0);
+        ev = post_add_event(d, EVENT_PUSH2_ADD);
+        break;
     default:
         fprintf(stderr, "dev_list_add(): error posting event (unknown type)\n");
         return;
@@ -166,6 +170,10 @@ void dev_list_remove(device_t type, const char *node) {
     case DEV_TYPE_CROW:
         ev = event_data_new(EVENT_CROW_REMOVE);
         ev->crow_remove.id = dn->d->base.id;
+        break;
+    case DEV_TYPE_PUSH2:
+        ev = event_data_new(EVENT_PUSH2_REMOVE);
+        ev->push2_remove.id = dn->d->base.id;
         break;
     default:
         fprintf(stderr, "dev_list_remove(): error posting event (unknown type)\n");

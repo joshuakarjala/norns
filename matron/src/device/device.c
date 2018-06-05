@@ -53,6 +53,11 @@ union dev *dev_new(
             goto err_init;
         }
         break;
+    case DEV_TYPE_PUSH2:
+        if (dev_push2_init(d) < 0) {
+            goto err_init;
+        }
+        break;
     default:
         fprintf(stderr,
             "calling device.c:dev_new() with unkmown device type; this is an error!");

@@ -39,9 +39,10 @@ struct watch {
 //-------------------------
 //----- static variables
 
+#define DEV_POLL_COUNT 4
 // watchers
 // FIXME: these names / paths are really arbitrary.
-static struct watch w[DEV_TYPE_COUNT] = {
+static struct watch w[DEV_POLL_COUNT] = {
     {
         .sub_name = "tty",
         .node_pattern = "/dev/ttyUSB*"
@@ -61,7 +62,7 @@ static struct watch w[DEV_TYPE_COUNT] = {
 };
 
 // file descriptors to watch/poll
-struct pollfd pfds[DEV_TYPE_COUNT];
+struct pollfd pfds[DEV_POLL_COUNT];
 // thread for polling all the watched file descriptors
 pthread_t watch_tid;
 
@@ -72,7 +73,7 @@ static void handle_device(struct udev_device *dev);
 static device_t check_dev_type(struct udev_device *dev);
 static const char* get_alsa_midi_node(struct udev_device *dev);
 static const char* get_device_name(struct udev_device *dev);
-
+static device_t getdevicetype(struct udev_device *dev, device_t dt);
 //--------------------------------
 //---- extern function definitions
 
@@ -84,7 +85,7 @@ void dev_monitor_init(void) {
     udev = udev_new();
     assert(udev);
 
-    for(int i = 0; i < DEV_TYPE_COUNT; i++) {
+    for(int i = 0; i < DEV_POLL_COUNT; i++) {
         w[i].mon = udev_monitor_new_from_netlink(udev, "udev");
         if(w[i].mon == NULL) {
             fprintf(stderr,
@@ -123,7 +124,7 @@ void dev_monitor_init(void) {
 
 void dev_monitor_deinit(void) {
     pthread_cancel(watch_tid);
-    for (int i = 0; i < DEV_TYPE_COUNT; i++) {
+    for (int i = 0; i < DEV_POLL_COUNT; i++) {
         free(w[i].mon);
     }
 }
@@ -138,7 +139,7 @@ int dev_monitor_scan(void) {
         return 1;
     }
 
-    for(int i = 0; i < DEV_TYPE_COUNT; i++) {
+    for(int i = 0; i < DEV_POLL_COUNT; i++) {
         struct udev_enumerate *ue;
         struct udev_list_entry *devices, *dev_list_entry;
 
@@ -175,7 +176,7 @@ void* watch_loop(void *p) {
     struct udev_device *dev;
 
     while (1) {
-        if (poll(pfds, DEV_TYPE_COUNT, WATCH_TIMEOUT_MS) < 0) {
+        if (poll(pfds, DEV_POLL_COUNT, WATCH_TIMEOUT_MS) < 0) {
             switch (errno) {
             case EINVAL:
                 perror("error in poll()");
@@ -187,7 +188,7 @@ void* watch_loop(void *p) {
         }
 
         // see which monitor has data
-        for (int i = 0; i < DEV_TYPE_COUNT; i++) {
+        for (int i = 0; i < DEV_POLL_COUNT; i++) {
             if (pfds[i].revents & POLLIN) {
                 dev = udev_monitor_receive_device(w[i].mon);
                 if (dev) {
@@ -211,8 +212,9 @@ void handle_device(struct udev_device *dev) {
         if (node != NULL) {
             device_t t = check_dev_type(dev);
 
-            if (t >= 0 && t < DEV_TYPE_COUNT) {
-                dev_list_add(t, node, get_device_name(dev));
+            if (t >= 0 && t < DEV_POLL_COUNT) {
+                printf("null action : %s\n",get_device_name(dev));
+                dev_list_add(getdevicetype(dev, t) , node, get_device_name(dev));
             }
         }
     } else {
@@ -221,24 +223,26 @@ void handle_device(struct udev_device *dev) {
             // try to act according to
             // https://github.com/systemd/systemd/blob/master/rules/78-sound-card.rules
             if (strcmp(action, "change") == 0) {
+
                 const char* alsa_node = get_alsa_midi_node(dev);
 
+                fprintf(stderr, "sound  : %s\n",get_device_name(dev));
                 if (alsa_node != NULL) {
-                    dev_list_add(DEV_TYPE_MIDI, alsa_node, get_device_name(dev));
+                    dev_list_add(getdevicetype(dev, DEV_TYPE_MIDI), alsa_node, get_device_name(dev));
                 }
             } else if (strcmp(action, "remove") == 0) {
                 if (node != NULL) {
-                    dev_list_remove(DEV_TYPE_MIDI, node);
+                    dev_list_remove(getdevicetype(dev, DEV_TYPE_MIDI), node);
                 }
             }
         } else {
             device_t t = check_dev_type(dev);
 
-            if (t >= 0 && t < DEV_TYPE_COUNT) {
+            if (t >= 0 && t < DEV_POLL_COUNT) {
                 if (strcmp(action, "add") == 0) {
-                    dev_list_add(t, node, get_device_name(dev));
+                    dev_list_add(getdevicetype(dev,t), node, get_device_name(dev));
                 } else if (strcmp(action, "remove") == 0) {
-                    dev_list_remove(t, node);
+                    dev_list_remove(getdevicetype(dev,t), node);
                 }
             }
         }
@@ -253,7 +257,7 @@ device_t check_dev_type(struct udev_device *dev) {
         // for now, just get USB devices.
         // eventually we might want to use this same system for GPIO, &c...
         if (udev_device_get_parent_with_subsystem_devtype(dev, "usb", NULL)) {
-            for (int i = 0; i < DEV_TYPE_COUNT; i++) {
+            for (int i = 0; i < DEV_POLL_COUNT; i++) {
                 if (fnmatch(w[i].node_pattern, node, 0) == 0) {
                     t = i;
                     break;
@@ -308,3 +312,16 @@ const char* get_device_name(struct udev_device *dev) {
 
     return strdup(current_name);
 }
+
+
+static device_t getdevicetype(struct udev_device *dev, device_t dt) {
+    if(dt==DEV_TYPE_MIDI) {
+        char* name = (char*) get_device_name(dev);
+        if(name && strcmp(name,"Ableton Push 2")==0) {
+            dt = DEV_TYPE_PUSH2;
+        }
+        free(name);
+    }
+    return dt;
+}
+
