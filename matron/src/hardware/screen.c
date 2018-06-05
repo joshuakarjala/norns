@@ -17,6 +17,7 @@
 #include <cairo-ft.h>
 
 #include "args.h"
+#include "screen.h"
 
 // skip this if you don't want every screen module call to perform null checks
 #ifndef CHECK_CR
@@ -33,12 +34,13 @@ static float c[16] =
  0.4, 0.46666666666667, 0.53333333333333, 0.6, 0.66666666666667,
  0.73333333333333, 0.8, 0.86666666666667, 0.93333333333333, 1};
 
+static cairo_t *crmain;
+static cairo_t *crfb;
 static cairo_surface_t *surface;
 static cairo_surface_t *surfacefb;
 static cairo_surface_t *image;
 
 static cairo_t *cr;
-static cairo_t *crfb;
 static cairo_font_face_t *ct[NUM_FONTS];
 static FT_Library value;
 static FT_Error status;
@@ -163,8 +165,18 @@ void screen_init(void) {
     crfb = cairo_create(surfacefb);
 
     surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32,128,64);
-    cr = cairo_create(surface);
+    crmain = cairo_create(surface);
 
+   
+    screen_cr(crmain);
+
+    // config buffer
+    cairo_set_operator(crfb, CAIRO_OPERATOR_SOURCE);
+    cairo_set_source_surface(crfb,surface,0,0); 
+}
+
+
+void screen_cr(void *newcr) {
     status = FT_Init_FreeType(&value);
     if(status != 0) {
         fprintf(stderr, "ERROR (screen) freetype init\n");
@@ -267,6 +279,8 @@ void screen_init(void) {
         }
     }
 
+    cr = (cairo_t*) newcr;
+
     cairo_set_operator(cr, CAIRO_OPERATOR_CLEAR);
     cairo_paint(cr);
     cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
@@ -276,7 +290,6 @@ void screen_init(void) {
     cairo_set_font_options(cr, font_options);
     cairo_font_options_destroy(font_options);
 
-    // default font
     cairo_set_font_face (cr, ct[0]);
     cairo_set_font_size(cr, 8.0);
 
@@ -287,7 +300,7 @@ void screen_init(void) {
 
 void screen_deinit(void) {
     CHECK_CR
-    cairo_destroy(cr);
+    cairo_destroy(crmain);
     cairo_surface_destroy(surface);
     cairo_destroy(crfb);
     cairo_surface_destroy(surfacefb);
@@ -295,7 +308,9 @@ void screen_deinit(void) {
 
 void screen_update(void) {
     CHECK_CR
-    cairo_paint(crfb);
+    if(cr==crmain) {
+        cairo_paint(crfb);
+    }
 }
 
 void screen_save(void) {
@@ -311,7 +326,7 @@ void screen_restore(void) {
 void screen_font_face(int i) {
     CHECK_CR
     if( (i >= 0) && (i < NUM_FONTS) ) {
-        cairo_set_font_face(cr,ct[i]);
+        // cairo_set_font_face(cr,ct[i]);
     }
 }
 

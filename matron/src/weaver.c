@@ -1566,9 +1566,7 @@ void w_handle_push2_add(void *p) {
   lua_pushinteger(lvm, id + 1); // convert to 1-base
   lua_pushstring(lvm, base->name);
   lua_pushlightuserdata(lvm, dev);
-  fprintf(stderr, "+w_handle_push2_add call");
   l_report(lvm, l_docall(lvm, 3, 0));
-  fprintf(stderr, "-w_handle_push2_add call");
 }
 
 void w_handle_push2_remove(int id) {
