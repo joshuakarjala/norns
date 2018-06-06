@@ -12,7 +12,59 @@
 #include <cairo.h>
 #include <cairo-ft.h>
 
+#include "../weaver.h"
 #include "../hardware/screen.h"
+
+// lua
+#include <lua.h>
+#include <lualib.h>
+#include <lauxlib.h>
+
+// fwd decls
+int init(void *self );
+int deinit(void *self );
+int render(void *self );
+
+void dev_push2_midi_read(void *self, uint8_t* msg_buf, uint8_t* msg_pos, uint8_t* msg_len);
+ssize_t dev_push2_midi_send(void *self, uint8_t *data, size_t n);
+void push2_handle_midi(void* self, union event_data* ev);
+void push2_register_lua(void* self);
+
+#define P2_MIDI_NOTE_ON     0x80
+#define P2_MIDI_NOTE_OFF    0x90
+#define P2_MIDI_POLY_AT     0xA0
+#define P2_MIDI_CC          0xB0
+#define P2_MIDI_PGM         0xC0
+#define P2_MIDI_CHAN_PR     0xD0
+#define P2_MIDI_PB          0xE0
+#define P2_MIDI_OTHER       0xF0
+
+
+// midi note/cc numbers
+#define P2_NOTE_PAD_START       36
+#define P2_NOTE_PAD_END         (P2_NOTE_PAD_START + 63)
+
+#define P2_ENCODER_CC_TEMPO     14
+#define P2_ENCODER_CC_SWING     15
+#define P2_ENCODER_CC_START     71
+#define P2_ENCODER_CC_END       (P2_ENCODER_CC_START + 7)
+#define P2_ENCODER_CC_VOLUME    7
+
+#define P2_NOTE_ENCODER_START   0
+#define P2_NOTE_ENCODER_END     (P2_NOTE_ENCODER_START + 7)
+
+
+#define P2_DEV_SELECT_CC_START  102
+#define P2_DEV_SELECT_CC_END    (P2_DEV_SELECT_CC_START + 7)
+
+#define P2_TRACK_SELECT_CC_START    20
+#define P2_TRACK_SELECT_CC_END      (P2_TRACK_SELECT_CC_START + 7)
+
+#define P2_USER_CC                  59
+#define P2_DEVICE_CC                110
+#define P2_BROWSE_CC                111
+
+
 
 static const uint16_t VID = 0x2982, PID = 0x1967;
 
@@ -20,6 +72,15 @@ static const uint16_t VID = 0x2982, PID = 0x1967;
 static uint8_t headerPkt[HDR_PKT_SZ] = { 0xFF, 0xCC, 0xAA, 0x88, 0x00, 0x00, 0x00, 0x00,
                                          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
                                        };
+
+
+// TODO...
+// 1. grid, register push 2 with norns as grid (its opaque handler, so should not care)
+// 2. midi handler, separate thread? or same thread non-blocking?
+// 3. interpret midi, for encoders, send as encoder events
+// 3. interpret midi, send as grid key events
+// 4. grid inbound, convert to midi and sent to pads
+
 
 
 // Future versions of libusb will use usb_interface instead of interface
@@ -51,10 +112,6 @@ static int perr(char const *format, ...) {
 #define ERR_EXIT(errcode) do { perr("   %s\n", libusb_strerror((enum libusb_error)errcode)); return -1; } while (0)
 #define CALL_CHECK(fcall) do { r=fcall; if (r < 0) ERR_EXIT(r); } while (0);
 
-int init(void *self );
-int deinit(void *self );
-int render(void *self );
-
 
 int dev_push2_init(void *self) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
@@ -63,6 +120,36 @@ int dev_push2_init(void *self) {
     base->start = &dev_push2_start;
     base->deinit = &dev_push2_deinit;
 
+    // midi
+    unsigned int alsa_card;
+    unsigned int alsa_dev;
+    char *alsa_name;
+
+    sscanf(base->path, "/dev/snd/midiC%uD%u", &alsa_card, &alsa_dev);
+
+    if (asprintf(&alsa_name, "hw:%u,%u", alsa_card, alsa_dev) < 0) {
+        fprintf(stderr, "push2: failed to create alsa device name for card %d,%d\n", alsa_card, alsa_dev);
+        return -1;
+    }
+
+    int mode = SND_RAWMIDI_NONBLOCK;
+    if (snd_rawmidi_open(&push2->handle_in, &push2->handle_out, alsa_name, mode) < 0) {
+        fprintf(stderr, "push2: failed to open alsa device %s\n", alsa_name);
+        return -1;
+    }
+
+    //TEST
+    uint8_t test_note[3];
+    test_note[0] = P2_MIDI_NOTE_ON; test_note[1] = P2_NOTE_PAD_START; test_note[2] = 100;
+    dev_push2_midi_send(self, test_note, 3);
+
+    // currently hardcode, later noet
+    push2->cuckoomode_ = true;
+
+    // grid
+    push2_register_lua(self);
+
+    // screen
     push2->headerPkt_ = headerPkt;
     push2->handle_ = NULL;
     push2->iface_ = 0;
@@ -79,33 +166,51 @@ int dev_push2_init(void *self) {
     push2->cr = cairo_create (push2->surface);
     memset(push2->dataPkt_, 0, PUSH2_DATA_PKT_SZ);
 
-    screen_cr((void*) push2->cr);
-    cairo_scale(push2->cr, 2.0f, 2.0f);
+    if (push2->cuckoomode_) {
+        screen_cr((void*) push2->cr);
+        cairo_scale(push2->cr, 2.0f, 2.0f);
+    }
+
     init(self);
+
+    //loop
     push2->running_ = true;
     return 0;
 }
 
 void dev_push2_deinit(void *self) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
+
+    // midi
+    snd_rawmidi_close(push2->handle_in);
+    snd_rawmidi_close(push2->handle_out);
+
+    // loop
     push2->running_ = false;
     while (!push2->running_) {
         sleep(1);
     }
 
     push2->running_ = false;
+
+    // screen
     deinit(self);
     cairo_destroy (push2->cr);
     cairo_surface_destroy (push2->surface);
-    ;
 }
 
 void* dev_push2_start(void *self) {
     perr("Push 2 render loop starting\n");
     struct dev_push2 *push2 = (struct dev_push2 *) self;
+
+    uint8_t msg_buf[256];
+    uint8_t msg_pos = 0;
+    uint8_t msg_len = 0;
+
     while (push2->running_) {
+        dev_push2_midi_read(self, msg_buf, &msg_pos, &msg_len);
         render(self);
-        usleep(1);
+        // usleep(1);
     }
     push2->running_ = true;
     perr("Push 2 render loop stopped\n");
@@ -184,6 +289,255 @@ int deinit(void *self) {
     return 0;
 }
 
+/***
+ * grid: set led
+ * @function grid_set_led
+ * @param dev grid device
+ * @param x x
+ * @param y y
+ * @param z level (0-15)
+ */
+int push2_grid_set_led(lua_State *l) {
+    if (lua_gettop(l) != 4) {
+        return luaL_error(l, "wrong number of arguments");
+    }
 
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    // struct dev_push2 *md = lua_touserdata(l, 1);
+    int x = (int) luaL_checkinteger(l, 2) - 1; // convert from 1-base
+    int y = (int) luaL_checkinteger(l, 3) - 1; // convert from 1-base
+    int z = (int) luaL_checkinteger(l, 4); // don't convert value!
+    // dev_monome_set_led(md, x, y, z);
+    perr("push2_grid_set_led %d,%d,%d", x, y, z);
+    lua_settop(l, 0);
+    return 0;
+}
 
+/***
+ * grid: set all LEDs
+ * @function grid_all_led
+ * @param dev grid device
+ * @param z level (0-15)
+ */
+int push2_grid_all_led(lua_State *l) {
+    if (lua_gettop(l) != 2) {
+        return luaL_error(l, "wrong number of arguments");
+    }
 
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    // struct dev_push2 *md = lua_touserdata(l, 1);
+    int z = (int) luaL_checkinteger(l, 2); // don't convert value!
+    // dev_monome_all_led(md, z);
+    perr("push2_grid_all_led %d", z);
+    lua_settop(l, 0);
+    return 0;
+}
+
+/***
+ * grid: refresh
+ * @function grid_refresh
+ * @param dev grid device
+ */
+int push2_grid_refresh(lua_State *l) {
+    if (lua_gettop(l) != 1) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    // struct dev_push2 *md = lua_touserdata(l, 1);
+    perr("push2_grid_refresh");
+    // dev_monome_refresh(md);
+    lua_settop(l, 0);
+    return 0;
+}
+
+/***
+ * grid: rows
+ * @function grid_rows
+ * @param dev grid device
+ */
+int push2_grid_rows(lua_State *l) {
+    if (lua_gettop(l) != 1) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    // struct dev_push2 *md = lua_touserdata(l, 1);
+    // lua_pushinteger(l, dev_monomepush2_grid_rows(md));
+    lua_pushinteger(l, 8);
+    return 1;
+}
+
+/***
+ * grid: cold
+ * @function grid_cols
+ * @param dev grid device
+ */
+int push2_grid_cols(lua_State *l) {
+    if (lua_gettop(l) != 1) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    // struct dev_monome *md = lua_touserdata(l, 1);
+    // lua_pushinteger(l, dev_monomepush2_grid_cols(md));
+    lua_pushinteger(l, 8);
+    return 1;
+}
+
+void push2_register_lua(void *self) {
+    struct dev_push2 *push2 = (struct dev_push2 *) self;
+
+    lua_State* lvm = (lua_State*) luaState();
+    if (push2->cuckoomode_) {
+        lua_register(lvm, "grid_set_led", &push2_grid_set_led);
+        lua_register(lvm, "grid_all_led", &push2_grid_all_led);
+        lua_register(lvm, "grid_refresh", &push2_grid_refresh);
+        lua_register(lvm, "grid_rows", &push2_grid_rows);
+        lua_register(lvm, "grid_cols", &push2_grid_cols);
+    }
+}
+
+void dev_push2_midi_read(void *self, uint8_t* msg_buf, uint8_t* msg_pos, uint8_t* msg_len) {
+    struct dev_push2 *push2 = (struct dev_push2 *) self;
+    union event_data *ev;
+
+    ssize_t read = 0;
+    uint8_t byte = 0;
+
+    do {
+        read = snd_rawmidi_read(push2->handle_in, &byte, 1);
+
+        if (byte >= 0x80) {
+            // control byte
+            msg_buf[0] = byte;
+            *msg_pos = 1;
+
+            switch (byte & 0xf0) {
+            case P2_MIDI_NOTE_ON:
+            case P2_MIDI_NOTE_OFF:
+            case P2_MIDI_POLY_AT:
+            case P2_MIDI_CC:
+            case P2_MIDI_PB: {
+                *msg_len = 3;
+                break;
+            }
+            case P2_MIDI_CHAN_PR:
+            case P2_MIDI_PGM: {
+                *msg_len = 2;
+                break;
+            }
+            case P2_MIDI_OTHER: {
+                switch (byte & 0x0f) {
+                case 0x01: // midi time code
+                case 0x03: // song selec
+                    *msg_len = 2;
+                    break;
+                case 0x02 :
+                    *msg_len = 3;
+                    break;
+                case 0x07: // sysex end
+                    // TODO: properly handle sysex length
+                    *msg_len = *msg_pos; // sysex end
+                    break;
+                case 0x00: // sysex start
+                    *msg_len = 0;
+                    break;
+                case 0x08:
+                    *msg_len = 1;
+                    break;
+                default:
+                    *msg_len = 2;
+                    break;
+                }
+                break;
+            }
+            default: {
+                *msg_len = 2;
+                break;
+            }
+            } //case
+        } else {
+            // data byes
+            msg_buf[*msg_pos] = byte;
+            *msg_pos = *msg_pos + 1;
+        }
+
+        if (*msg_pos == *msg_len) {
+            ev = event_data_new(EVENT_MIDI_EVENT);
+            ev->midi_event.id = push2->dev.id;
+            ev->midi_event.data[0] = msg_buf[0];
+            ev->midi_event.data[1] = *msg_len > 1 ? msg_buf[1] : 0;
+            ev->midi_event.data[2] = *msg_len > 2 ? msg_buf[2] : 0;
+            ev->midi_event.nbytes = *msg_len;
+            push2_handle_midi(self, ev);
+            *msg_pos = 0;
+            *msg_len = 0;
+        }
+    } while (read > 0);
+}
+
+void push2_handle_midi(void* self, union event_data* ev) {
+    struct dev_push2 *push2 = (struct dev_push2 *) self;
+
+    uint8_t type = ev->midi_event.data[0] & 0xF0;
+    // uint8_t ch = ev->midi_event.data[0] & 0x0F;
+    // determine if midi message is going to be interpretted or just sent on
+    switch (type) {
+    case P2_MIDI_NOTE_ON: {
+        int8_t note = ev->midi_event.data[1];
+        // int8_t data = ev->midi_event.data[2];
+        if (note >= P2_NOTE_PAD_START && note <= P2_NOTE_ENCODER_END) {
+            if (push2->cuckoomode_) {
+                // send grid key event
+                return;
+            }
+        }
+        break;
+    }
+    case P2_MIDI_CC: {
+        int8_t cc = ev->midi_event.data[1];
+        int8_t data = ev->midi_event.data[2];
+        if (cc >= P2_DEV_SELECT_CC_START  && cc <= P2_DEV_SELECT_CC_END) {
+            if (push2->cuckoomode_) {
+                if (cc <= P2_DEV_SELECT_CC_START + 2) {
+                    int8_t button = cc - P2_DEV_SELECT_CC_START;
+                    // send norns button evt
+                    union event_data *ev = event_data_new(EVENT_KEY);
+                    ev->enc.n = button + 1;
+                    ev->enc.delta = (data > 0);
+                    // perr("norns button %d %d\n", ev->enc.n, ev->enc.delta);
+                    event_post(ev);
+                }
+            }
+        } else if (cc >= P2_ENCODER_CC_START  && cc <= P2_ENCODER_CC_END) {
+            if (push2->cuckoomode_) {
+                if (cc <= P2_ENCODER_CC_START + 2) {
+                    // send norns encoder evt
+                    int8_t enc = cc - P2_ENCODER_CC_START;
+                    const int steps = 1;
+                    float value = data & 0x40
+                                  ? (128.0f - (float) data) / (128.0f * steps) * -1.0f
+                                  : ((float) data) / (128.0f * steps);
+
+                    union event_data *ev = event_data_new(EVENT_ENC);
+                    ev->enc.n = enc + 1;
+                    ev->enc.delta = (value == 0 ? 0 : (value > 0 ? 1 : -1) );
+                    // perr("norns encoder %d %d\n", ev->enc.n, ev->enc.delta);
+                    event_post(ev);
+                }
+            }
+        }
+    }
+    default: {
+        ;
+    }
+
+    }
+    event_post(ev);
+}
+
+ssize_t dev_push2_midi_send(void *self, uint8_t *data, size_t n) {
+    struct dev_push2 *push2 = (struct dev_push2 *) self;
+    return snd_rawmidi_write(push2->handle_out, data, n);
+}
