@@ -26,7 +26,11 @@ struct dev_push2 {
     uint8_t *headerPkt_;
     unsigned char dataPkt_[PUSH2_DATA_PKT_SZ];
     unsigned char imgBuf_[PUSH2_DATA_PKT_SZ];
+    unsigned char imgBuf2_[PUSH2_DATA_PKT_SZ];
 
+
+    cairo_surface_t *surfacefb;
+    cairo_t *crfb;
 
 	cairo_surface_t *surface;
 	cairo_t *cr;
