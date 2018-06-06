@@ -15,7 +15,7 @@
 struct dev_push2 {
     struct dev_common dev;
 
-    bool cuckoomode_;
+    bool cuckoo_;
 	bool running_;
 
     // screen
@@ -24,6 +24,8 @@ struct dev_push2 {
     int endpointOut_;
 
     uint8_t *headerPkt_;
+
+    //todo, use dynamic alloc init/deinit
     unsigned char dataPkt_[PUSH2_DATA_PKT_SZ];
     unsigned char imgBuf_[PUSH2_DATA_PKT_SZ];
     unsigned char imgBuf2_[PUSH2_DATA_PKT_SZ];
@@ -38,6 +40,9 @@ struct dev_push2 {
     // midi
     snd_rawmidi_t *handle_in;
     snd_rawmidi_t *handle_out;
+
+    // grid
+    uint8_t grid_state[8][8];
 };
 
 extern int dev_push2_init(void *self);
