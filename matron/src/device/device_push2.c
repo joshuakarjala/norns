@@ -156,18 +156,35 @@ int dev_push2_init(void *self) {
     push2->endpointOut_ = 1;
 
     memset(push2->imgBuf_, 0, PUSH2_DATA_PKT_SZ);
+    memset(push2->imgBuf2_, 0, PUSH2_DATA_PKT_SZ);
+
+    // screen needs to be double buffered
+    push2->surfacefb = cairo_image_surface_create_for_data(
+                           (unsigned char*) push2->imgBuf_,
+                           CAIRO_FORMAT_RGB16_565,
+                           PUSH2_WIDTH,
+                           PUSH2_HEIGHT,
+                           PUSH2_LINE
+                       );
+    push2->crfb = cairo_create (push2->surfacefb);
+
     push2->surface = cairo_image_surface_create_for_data(
-                         (unsigned char*) push2->imgBuf_,
+                         (unsigned char*) push2->imgBuf2_,
                          CAIRO_FORMAT_RGB16_565,
                          PUSH2_WIDTH,
                          PUSH2_HEIGHT,
                          PUSH2_LINE
                      );
     push2->cr = cairo_create (push2->surface);
+
+
     memset(push2->dataPkt_, 0, PUSH2_DATA_PKT_SZ);
 
+    cairo_set_operator(push2->crfb, CAIRO_OPERATOR_SOURCE);
+    cairo_set_source_surface(push2->crfb, push2->surface, 0, 0);
+
     if (push2->cuckoomode_) {
-        screen_cr((void*) push2->cr);
+        screen_cr((void*) push2->cr, (void*) push2->crfb);
         cairo_scale(push2->cr, 2.0f, 2.0f);
     }
 
@@ -197,6 +214,8 @@ void dev_push2_deinit(void *self) {
     deinit(self);
     cairo_destroy (push2->cr);
     cairo_surface_destroy (push2->surface);
+    cairo_destroy (push2->crfb);
+    cairo_surface_destroy (push2->surfacefb);
 }
 
 void* dev_push2_start(void *self) {
@@ -480,6 +499,8 @@ void dev_push2_midi_read(void *self, uint8_t* msg_buf, uint8_t* msg_pos, uint8_t
 void push2_handle_midi(void* self, union event_data* ev) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
 
+    static struct timespec encoderthin[8];
+
     uint8_t type = ev->midi_event.data[0] & 0xF0;
     // uint8_t ch = ev->midi_event.data[0] & 0x0F;
     // determine if midi message is going to be interpretted or just sent on
@@ -515,16 +536,25 @@ void push2_handle_midi(void* self, union event_data* ev) {
                 if (cc <= P2_ENCODER_CC_START + 2) {
                     // send norns encoder evt
                     int8_t enc = cc - P2_ENCODER_CC_START;
-                    const int steps = 1;
-                    float value = data & 0x40
-                                  ? (128.0f - (float) data) / (128.0f * steps) * -1.0f
-                                  : ((float) data) / (128.0f * steps);
 
-                    union event_data *ev = event_data_new(EVENT_ENC);
-                    ev->enc.n = enc + 1;
-                    ev->enc.delta = (value == 0 ? 0 : (value > 0 ? 1 : -1) );
-                    // perr("norns encoder %d %d\n", ev->enc.n, ev->enc.delta);
-                    event_post(ev);
+                    int v = data > 0x40 ? -1 : 1;
+                    // int v = data > 0x40 ? (0x80 - data) * -1 : data;
+                    // perr("norns encoder %d %04x %d\n", enc, data, v);
+
+                    struct timespec now;
+                    clock_gettime(CLOCK_MONOTONIC, &now); // get initial time-stamp
+
+                    double diffns = (double)(now.tv_sec - encoderthin[enc].tv_sec) * 1.0e9 +
+                                  (double)(now.tv_nsec - encoderthin[enc].tv_nsec);
+
+                    if (diffns > 1000000){
+                        encoderthin[enc] = now;
+                        union event_data *ev = event_data_new(EVENT_ENC);
+                        ev->enc.n = enc + 1;
+                        ev->enc.delta = v;
+                        // perr("norns encoder %d %d\n", ev->enc.n, ev->enc.delta);
+                        event_post(ev);
+                    }
                 }
             }
         }

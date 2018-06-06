@@ -146,12 +146,11 @@ void screen_init(void) {
     surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32,128,64);
     crmain = cairo_create(surface);
 
-   
-    screen_cr(crmain);
-
     // config buffer
     cairo_set_operator(crfb, CAIRO_OPERATOR_SOURCE);
     cairo_set_source_surface(crfb,surface,0,0); 
+   
+    screen_cr(crmain,crfb);
 }
 
 void screen_deinit(void) {
@@ -164,7 +163,7 @@ void screen_deinit(void) {
 
 
 
-void screen_cr(void *newcr) {
+void screen_cr(void *newcr,void *newcrfb) {
     status = FT_Init_FreeType(&value);
     if(status != 0) {
         fprintf(stderr, "ERROR (screen) freetype init\n");
@@ -216,13 +215,13 @@ void screen_cr(void *newcr) {
     cairo_set_font_face (cr, ct[0]);
     cairo_set_font_options(cr, font_options);
     cairo_set_font_size(cr, 8.0);
+
+    crfb = (cairo_t*) newcrfb;
 }
 
 void screen_update(void) {
     CHECK_CR
-    if(cr==crmain) {
-        cairo_paint(crfb);
-    }
+    cairo_paint(crfb);
 }
 
 void screen_font_face(int i) {
