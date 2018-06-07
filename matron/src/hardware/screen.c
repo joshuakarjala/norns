@@ -44,6 +44,33 @@ static FT_Error status;
 static FT_Face face[NUM_FONTS];
 static double text_xy[2];
 
+// #define SCREEN_FB_FMT   CAIRO_FORMAT_ARGB32
+// #define SCREEN_FMT      CAIRO_FORMAT_ARGB32
+// #define SCREEN_X 1024
+// #define SCREEN_Y 600
+// #define SCREEN_SCALE 8
+
+
+#ifndef SCREEN_FB_FMT
+#define SCREEN_FB_FMT CAIRO_FORMAT_RGB16_565
+#endif
+
+#ifndef SCREEN_FMT
+#define SCREEN_FMT CAIRO_FORMAT_ARGB32
+#endif
+
+#ifndef SCREEN_X 
+#define SCREEN_X 128
+#endif 
+
+#ifndef SCREEN_Y
+#define SCREEN_Y 64
+#endif
+
+#ifndef SCREEN_SCALE
+#define SCREEN_SCALE 1.0
+#endif
+
 typedef struct _cairo_linuxfb_device {
     int fb_fd;
     unsigned char *fb_data;
@@ -119,11 +146,11 @@ cairo_surface_t *cairo_linuxfb_surface_create(const char *fb_name)
     /* Create the cairo surface which will be used to draw to */
     surface = cairo_image_surface_create_for_data(
         device->fb_data,
-        CAIRO_FORMAT_RGB16_565,
+        SCREEN_FB_FMT,
         device->fb_vinfo.xres,
         device->fb_vinfo.yres,
         cairo_format_stride_for_width(
-            CAIRO_FORMAT_RGB16_565,
+            SCREEN_FB_FMT,
             device
             ->fb_vinfo.xres) );
     cairo_surface_set_user_data(surface, NULL, device,
@@ -143,14 +170,16 @@ void screen_init(void) {
     if(surfacefb == NULL) { return; }
     crfb = cairo_create(surfacefb);
 
-    surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32,128,64);
+    surface = cairo_image_surface_create(SCREEN_FMT,SCREEN_X,SCREEN_Y);
     crmain = cairo_create(surface);
 
     // config buffer
     cairo_set_operator(crfb, CAIRO_OPERATOR_SOURCE);
     cairo_set_source_surface(crfb,surface,0,0); 
-   
+
+    cairo_scale(cr,SCREEN_SCALE,SCREEN_SCALE);   
     screen_cr(crmain,crfb);
+
 }
 
 void screen_deinit(void) {
