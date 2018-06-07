@@ -34,6 +34,11 @@ void dev_push2_grid_state(void* self, uint8_t x, uint8_t y, uint8_t z);
 void dev_push2_grid_state_all(void* self, uint8_t z);
 void dev_push2_grid_refresh(void* self);
 
+#define GRID_X 8
+#define GRID_Y 8
+
+
+
 #define P2_MIDI_NOTE_ON     0x90
 #define P2_MIDI_NOTE_OFF    0x80
 #define P2_MIDI_POLY_AT     0xA0
@@ -238,9 +243,9 @@ void* dev_push2_start(void *self) {
     int count = 0;
     while (push2->running_) {
         dev_push2_midi_read(self, msg_buf, &msg_pos, &msg_len);
-        if(count%16) render(self); //~60fps
+        if (count % 16) render(self); //~60fps
         usleep(1000); // 1ms
-	count++;
+        count++;
     }
     push2->running_ = true;
     perr("Push 2 render loop stopped\n");
@@ -321,10 +326,10 @@ int deinit(void *self) {
 
 void dev_push2_grid_state(void* self, uint8_t x, uint8_t y, uint8_t z) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
-    if(push2->grid_state[x][y] == z) return;
+    if (push2->grid_state[x][y] == z) return;
 
     uint8_t msg[3] = {P2_MIDI_NOTE_ON, P2_NOTE_PAD_START, (z > 0 ? 0x30 + z : 0)};
-    uint8_t note = P2_NOTE_PAD_START + (x & 7) + ( (y & 7) * 8);
+    uint8_t note = P2_NOTE_PAD_START + (x & (GRID_X - 1)) + ( ((GRID_Y - y) & (GRID_Y - 1) ) * GRID_X);
     msg[1] = note;
     dev_push2_midi_send(defaultPush2, msg, 3);
 
@@ -334,11 +339,10 @@ void dev_push2_grid_state(void* self, uint8_t x, uint8_t y, uint8_t z) {
 void dev_push2_grid_state_all(void* self, uint8_t z) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
     uint8_t msg[3] = {P2_MIDI_NOTE_ON, P2_NOTE_PAD_START, (z > 0 ? 0x30 + z : 0)};
-    int x = 0, y = 0;
-    for (y = 0; y < 8; y++) {
-        for (x = 0; x < 8; x++) {
-            if(push2->grid_state[x][y] == z) continue;
-            msg[1] = P2_NOTE_PAD_START + (y * 8) + x;
+    for (int y = 0; y < GRID_Y; y++) {
+        for (int x = 0; x < GRID_X; x++) {
+            if (push2->grid_state[x][y] == z) continue;
+            msg[1] = P2_NOTE_PAD_START + (y * GRID_X) + x;
             dev_push2_midi_send(defaultPush2, msg, 3);
             push2->grid_state[x][y] = z;
         }
@@ -348,11 +352,10 @@ void dev_push2_grid_state_all(void* self, uint8_t z) {
 void dev_push2_grid_refresh(void* self) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
     uint8_t msg[3] = {P2_MIDI_NOTE_ON, P2_NOTE_PAD_START, 0};
-    int x = 0, y = 0;
-    for (y = 0; y < 8; y++) {
-        for (x = 0; x < 8; x++) {
+    for (int y = 0; y < GRID_Y; y++) {
+        for (int x = 0; x < GRID_X; x++) {
             uint8_t z = push2->grid_state[x][y];
-            msg[1] = P2_NOTE_PAD_START + (y * 8) + x;
+            msg[1] = P2_NOTE_PAD_START + (y * GRID_X) + x;
             msg[2] = (z > 0 ? 0x30 + z : 0);
             dev_push2_midi_send(defaultPush2, msg, 3);
         }
@@ -379,7 +382,7 @@ int push2_grid_set_led(lua_State *l) {
     int z = (int) luaL_checkinteger(l, 4); // don't convert value!
     // dev_monome_set_led(md, x, y, z);
     //perr("push2_grid_set_led %d,%d,%d", x, y, z);
-    dev_push2_grid_state(defaultPush2, x & 7, y & 7, z);
+    dev_push2_grid_state(defaultPush2, x, y, z);
     lua_settop(l, 0);
     return 0;
 }
@@ -436,7 +439,7 @@ int push2_grid_rows(lua_State *l) {
     luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
     // struct dev_push2 *md = lua_touserdata(l, 1);
     // lua_pushinteger(l, dev_monomepush2_grid_rows(md));
-    lua_pushinteger(l, 8);
+    lua_pushinteger(l, GRID_Y);
     return 1;
 }
 
@@ -453,7 +456,7 @@ int push2_grid_cols(lua_State *l) {
     luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
     // struct dev_monome *md = lua_touserdata(l, 1);
     // lua_pushinteger(l, dev_monomepush2_grid_cols(md));
-    lua_pushinteger(l, 8);
+    lua_pushinteger(l, GRID_X);
     return 1;
 }
 
@@ -565,8 +568,8 @@ void push2_handle_midi(void* self, union event_data* ev) {
         if (note >= P2_NOTE_PAD_START && note <= P2_NOTE_PAD_END) {
             if (push2->cuckoo_) {
                 // send grid key event
-                int x = (note - P2_NOTE_PAD_START) % 8;
-                int y = (note - P2_NOTE_PAD_START) / 8;
+                int x = (note - P2_NOTE_PAD_START) % GRID_X;
+                int y = GRID_Y - ((note - P2_NOTE_PAD_START) / GRID_X);
                 union event_data *ev = event_data_new(EVENT_GRID_KEY);
                 ev->grid_key.id = push2->dev.id;
                 ev->grid_key.x = x;
