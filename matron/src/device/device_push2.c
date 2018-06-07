@@ -84,11 +84,8 @@ static uint8_t headerPkt[HDR_PKT_SZ] = { 0xFF, 0xCC, 0xAA, 0x88, 0x00, 0x00, 0x0
 
 
 // TODO...
-// 1. grid, register push 2 with norns as grid (its opaque handler, so should not care)
-// 2. midi handler, separate thread? or same thread non-blocking?
-// 3. interpret midi, for encoders, send as encoder events
-// 3. interpret midi, send as grid key events
-// 4. grid inbound, convert to midi and sent to pads
+//1. midi mode
+//2. virtual 16x8 grid
 
 
 
@@ -200,7 +197,7 @@ int dev_push2_init(void *self) {
     if (defaultPush2 == NULL) defaultPush2 = push2;
 
 
-    dev_push2_grid_state_all(push2, 10);
+    dev_push2_grid_state_all(push2, 0);
     //loop
     push2->running_ = true;
     return 0;
@@ -355,7 +352,7 @@ void dev_push2_grid_refresh(void* self) {
     for (int y = 0; y < GRID_Y; y++) {
         for (int x = 0; x < GRID_X; x++) {
             uint8_t z = push2->grid_state[x][y];
-            msg[1] = P2_NOTE_PAD_START + (y * GRID_X) + x;
+            msg[1] = P2_NOTE_PAD_START + ((GRID_Y - y) * GRID_X) + x;
             msg[2] = (z > 0 ? 0x30 + z : 0);
             dev_push2_midi_send(defaultPush2, msg, 3);
         }
