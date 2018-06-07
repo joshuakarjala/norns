@@ -235,10 +235,12 @@ void* dev_push2_start(void *self) {
     uint8_t msg_pos = 0;
     uint8_t msg_len = 0;
 
+    int count = 0;
     while (push2->running_) {
         dev_push2_midi_read(self, msg_buf, &msg_pos, &msg_len);
-        render(self);
-        // usleep(1);
+        if(count%16) render(self); //~60fps
+        usleep(1000); // 1ms
+	count++;
     }
     push2->running_ = true;
     perr("Push 2 render loop stopped\n");
@@ -319,6 +321,8 @@ int deinit(void *self) {
 
 void dev_push2_grid_state(void* self, uint8_t x, uint8_t y, uint8_t z) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
+    if(push2->grid_state[x][y] == z) return;
+
     uint8_t msg[3] = {P2_MIDI_NOTE_ON, P2_NOTE_PAD_START, (z > 0 ? 0x30 + z : 0)};
     uint8_t note = P2_NOTE_PAD_START + (x & 7) + ( (y & 7) * 8);
     msg[1] = note;
@@ -333,6 +337,7 @@ void dev_push2_grid_state_all(void* self, uint8_t z) {
     int x = 0, y = 0;
     for (y = 0; y < 8; y++) {
         for (x = 0; x < 8; x++) {
+            if(push2->grid_state[x][y] == z) continue;
             msg[1] = P2_NOTE_PAD_START + (y * 8) + x;
             dev_push2_midi_send(defaultPush2, msg, 3);
             push2->grid_state[x][y] = z;
@@ -373,7 +378,7 @@ int push2_grid_set_led(lua_State *l) {
     int y = (int) luaL_checkinteger(l, 3) - 1; // convert from 1-base
     int z = (int) luaL_checkinteger(l, 4); // don't convert value!
     // dev_monome_set_led(md, x, y, z);
-    perr("push2_grid_set_led %d,%d,%d", x, y, z);
+    //perr("push2_grid_set_led %d,%d,%d", x, y, z);
     dev_push2_grid_state(defaultPush2, x & 7, y & 7, z);
     lua_settop(l, 0);
     return 0;
@@ -394,7 +399,7 @@ int push2_grid_all_led(lua_State *l) {
     // struct dev_push2 *md = lua_touserdata(l, 1);
     int z = (int) luaL_checkinteger(l, 2); // don't convert value!
     // dev_monome_all_led(md, z);
-    perr("push2_grid_all_led %d", z);
+    //perr("push2_grid_all_led %d", z);
     dev_push2_grid_state_all(defaultPush2, z);
     lua_settop(l, 0);
     return 0;
@@ -412,7 +417,7 @@ int push2_grid_refresh(lua_State *l) {
 
     luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
     // struct dev_push2 *md = lua_touserdata(l, 1);
-    perr("push2_grid_refresh");
+    //perr("push2_grid_refresh");
     dev_push2_grid_refresh(defaultPush2);
     lua_settop(l, 0);
     return 0;
