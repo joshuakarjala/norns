@@ -32,7 +32,7 @@ void push2_register_lua(void* self);
 
 void dev_push2_grid_state(void* self, uint8_t x, uint8_t y, uint8_t z);
 void dev_push2_grid_state_all(void* self, uint8_t z);
-void dev_push2_grid_refresh(void* self);
+void dev_push2_grid_refresh(void* self,bool force);
 
 #define GRID_X 8
 #define GRID_Y 8
@@ -198,6 +198,7 @@ int dev_push2_init(void *self) {
 
 
     dev_push2_grid_state_all(push2, 0);
+    dev_push2_grid_refresh(self,true);
     //loop
     push2->running_ = true;
     return 0;
@@ -240,7 +241,7 @@ void* dev_push2_start(void *self) {
     int count = 0;
     while (push2->running_) {
         dev_push2_midi_read(self, msg_buf, &msg_pos, &msg_len);
-        if (count % 16) render(self); //~60fps
+        if (count % 32) render(self); //~30fps
         usleep(1000); // 1ms
         count++;
     }
@@ -323,12 +324,13 @@ int deinit(void *self) {
 
 void dev_push2_grid_state(void* self, uint8_t x, uint8_t y, uint8_t z) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
+/*
     if (push2->grid_state[x][y] == z) return;
-
     uint8_t msg[3] = {P2_MIDI_NOTE_ON, P2_NOTE_PAD_START, (z > 0 ? 0x30 + z : 0)};
-    uint8_t note = P2_NOTE_PAD_START + (x & (GRID_X - 1)) + ( ((GRID_Y - y) & (GRID_Y - 1) ) * GRID_X);
+    uint8_t note = P2_NOTE_PAD_START + (x & (GRID_X - 1)) + ( ( ((GRID_Y - y) & (GRID_Y - 1)  - 1)) * GRID_X);
     msg[1] = note;
     dev_push2_midi_send(defaultPush2, msg, 3);
+*/
 
     push2->grid_state[x][y] = z;
 }
@@ -346,15 +348,19 @@ void dev_push2_grid_state_all(void* self, uint8_t z) {
     }
 }
 
-void dev_push2_grid_refresh(void* self) {
+void dev_push2_grid_refresh(void* self,bool force) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
     uint8_t msg[3] = {P2_MIDI_NOTE_ON, P2_NOTE_PAD_START, 0};
     for (int y = 0; y < GRID_Y; y++) {
         for (int x = 0; x < GRID_X; x++) {
             uint8_t z = push2->grid_state[x][y];
-            msg[1] = P2_NOTE_PAD_START + ((GRID_Y - y) * GRID_X) + x;
-            msg[2] = (z > 0 ? 0x30 + z : 0);
-            dev_push2_midi_send(defaultPush2, msg, 3);
+            uint8_t z1 = push2->grid_state_buf[x][y];
+	    if(z!=z1 || force) {
+            	push2->grid_state_buf[x][y]=z;
+		msg[1] = P2_NOTE_PAD_START + ((GRID_Y - y - 1) * GRID_X) + x;
+		msg[2] = (z > 0 ? 0x30 + z : 0);
+		dev_push2_midi_send(defaultPush2, msg, 3);
+	    }
         }
     }
 }
@@ -418,7 +424,7 @@ int push2_grid_refresh(lua_State *l) {
     luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
     // struct dev_push2 *md = lua_touserdata(l, 1);
     //perr("push2_grid_refresh");
-    dev_push2_grid_refresh(defaultPush2);
+    dev_push2_grid_refresh(defaultPush2,false);
     lua_settop(l, 0);
     return 0;
 }
@@ -566,7 +572,7 @@ void push2_handle_midi(void* self, union event_data* ev) {
             if (push2->cuckoo_) {
                 // send grid key event
                 int x = (note - P2_NOTE_PAD_START) % GRID_X;
-                int y = GRID_Y - ((note - P2_NOTE_PAD_START) / GRID_X);
+                int y = GRID_Y - ((note - P2_NOTE_PAD_START) / GRID_X) - 1;
                 union event_data *ev = event_data_new(EVENT_GRID_KEY);
                 ev->grid_key.id = push2->dev.id;
                 ev->grid_key.x = x;
