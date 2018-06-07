@@ -43,6 +43,7 @@ struct dev_push2 {
 
     // grid
     uint8_t grid_state[8][8];
+    uint8_t grid_state_buf[8][8];
 };
 
 extern int dev_push2_init(void *self);
