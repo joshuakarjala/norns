@@ -198,7 +198,7 @@ void screen_init(void) {
     cairo_set_operator(crfb, CAIRO_OPERATOR_SOURCE);
     cairo_set_source_surface(crfb,surface,0,0); 
 
-    cairo_scale(cr,SCREEN_SCALE,SCREEN_SCALE);   
+    cairo_scale(crmain,SCREEN_SCALE,SCREEN_SCALE);   
     screen_cr(crmain,crfb);
 
 }
