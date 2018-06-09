@@ -79,9 +79,16 @@ void dev_push2_grid_refresh(void* self, bool force);
 #define P2_DEVICE_CC                110
 #define P2_BROWSE_CC                111
 
+#define P2_OCTAVE_UP 55
+#define P2_OCTAVE_DOWN 54
 #define P2_PAGE_PREV 62
 #define P2_PAGE_NEXT 63
+#define P2_LAYOUT 31
 
+#define PAD_NOTE_ON_CLR (int8_t) 127
+#define PAD_NOTE_OFF_CLR (int8_t) 0
+#define PAD_NOTE_ROOT_CLR (int8_t) 41
+#define PAD_NOTE_IN_KEY_CLR (int8_t) 3
 
 
 static const uint16_t VID = 0x2982, PID = 0x1967;
@@ -93,7 +100,8 @@ static uint8_t headerPkt[HDR_PKT_SZ] = { 0xFF, 0xCC, 0xAA, 0x88, 0x00, 0x00, 0x0
 
 
 // TODO...
-//1. midi mode
+// push 2 native mode
+
 
 // Future versions of libusb will use usb_interface instead of interface
 // in libusb_config_descriptor => cater for that
@@ -207,14 +215,20 @@ int dev_push2_init(void *self) {
 
     if (defaultPush2 == NULL) defaultPush2 = push2;
 
+    push2->midi_octave = 5;
+    push2->midi_mode = false;
     push2->grid_page = 0;
     push2->grid_state = calloc(GRID_X * GRID_Y, sizeof(uint8_t));
     push2->grid_state_buf = calloc(GRID_X * GRID_Y, sizeof(uint8_t));
     memset(push2->grid_state, 0, GRID_X * GRID_Y * sizeof(uint8_t));
     memset(push2->grid_state_buf, 0, GRID_X * GRID_Y * sizeof(uint8_t));
 
-    dev_push2_midi_send_cc(self, P2_PAGE_PREV, (push2->grid_page > 0 ) * 0x7f);
-    dev_push2_midi_send_cc(self, P2_PAGE_NEXT, (push2->grid_page < (GRID_X / PUSH2_GRID_X) - 1) * 0x7f);
+    dev_push2_midi_send_cc(self, P2_OCTAVE_DOWN,    (!push2->midi_mode ? 0x00 : (push2->midi_octave > 0 ? 0x7f : 0x04)));
+    dev_push2_midi_send_cc(self, P2_OCTAVE_UP,      (!push2->midi_mode ? 0x00 : (push2->midi_octave < 7 ? 0x7f : 0x04)));
+
+    dev_push2_midi_send_cc(self, P2_PAGE_PREV, (push2->grid_page > 0) ?  0x7f : 0x04);
+    dev_push2_midi_send_cc(self, P2_PAGE_NEXT, (push2->grid_page < (GRID_X / PUSH2_GRID_X) - 1) ? 0x7f : 0x04);
+    dev_push2_midi_send_cc(self, P2_LAYOUT, push2->midi_mode ? 0x7f : 0x04);
 
     dev_push2_grid_state_all(push2, 0);
     dev_push2_grid_refresh(self, true);
@@ -367,18 +381,39 @@ void dev_push2_grid_state_all(void* self, uint8_t z) {
 void dev_push2_grid_refresh(void* self, bool force) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
     uint8_t msg[3] = {P2_MIDI_NOTE_ON, P2_NOTE_PAD_START, 0};
-    int offset = push2->grid_page * PUSH2_GRID_X;
-    int end = offset + PUSH2_GRID_X;
 
-    for (int y = 0; y < GRID_Y; y++) {
-        for (int x = offset; x < end; x++) {
-            uint8_t z =  GRID_STATE(push2->grid_state, x, y) ;
-            uint8_t z1 =  GRID_STATE(push2->grid_state_buf, x, y) ;
-            if (z != z1 || force) {
-                GRID_STATE(push2->grid_state_buf, x, y) = z;
-                msg[1] = P2_NOTE_PAD_START + ((PUSH2_GRID_Y - y - 1) * PUSH2_GRID_X) + ( x - offset );
-                msg[2] = (z > 0 ? 0x30 + z : 0);
-                dev_push2_midi_send(defaultPush2, msg, 3);
+
+    if (!push2->midi_mode) { // grid emulation
+        int offset = push2->grid_page * PUSH2_GRID_X;
+        int end = offset + PUSH2_GRID_X;
+
+        for (int y = 0; y < GRID_Y; y++) {
+            for (int x = offset; x < end; x++) {
+                uint8_t z =  GRID_STATE(push2->grid_state, x, y) ;
+                uint8_t z1 =  GRID_STATE(push2->grid_state_buf, x, y) ;
+                if (z != z1 || force) {
+                    GRID_STATE(push2->grid_state_buf, x, y) = z;
+                    msg[1] = P2_NOTE_PAD_START + ((PUSH2_GRID_Y - y - 1) * PUSH2_GRID_X) + ( x - offset );
+                    msg[2] = (z > 0 ? ( z == 15 ? 122 : 9 + z) : 0);
+                    dev_push2_midi_send(push2, msg, 3);
+                }
+            }
+        }
+    } else {
+        if (force) { //ignore update grid events.
+            for (int y = 0; y < PUSH2_GRID_Y; y++ ) {
+                const int rowOffset = 5;
+                const int scale = 0b101011010101;
+                for (int x = 0; x < PUSH2_GRID_X; x++) {
+                    int clr = 0;
+                    int note_s = (y * rowOffset) + x;
+                    int i = note_s %  12;
+                    int v = (scale & (1 << ( 11 - i)));
+                    clr = (i == 0 ? PAD_NOTE_ROOT_CLR : (v > 0 ? PAD_NOTE_IN_KEY_CLR : PAD_NOTE_OFF_CLR));
+                    msg[1] = P2_NOTE_PAD_START + (y * PUSH2_GRID_X)  + x;
+                    msg[2] = clr;
+                    dev_push2_midi_send(push2, msg, 3);
+                }
             }
         }
     }
@@ -570,42 +605,53 @@ void dev_push2_midi_read(void *self, uint8_t* msg_buf, uint8_t* msg_pos, uint8_t
     } while (read > 0);
 }
 
-void push2_handle_midi(void* self, union event_data* ev) {
+void push2_handle_midi(void* self, union event_data* evin) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
 
     if (!push2->cuckoo_) {
-        event_post(ev);
+        event_post(evin);
         return;
     }
 
     static struct timespec encoderthin[8];
 
-    uint8_t type = ev->midi_event.data[0] & 0xF0;
+    uint8_t type = evin->midi_event.data[0] & 0xF0;
     // uint8_t ch = ev->midi_event.data[0] & 0x0F;
     // determine if midi message is going to be interpretted or just sent on
     switch (type) {
     case P2_MIDI_NOTE_ON:
     case P2_MIDI_NOTE_OFF: {
-        int8_t note = ev->midi_event.data[1];
-        int8_t data = ev->midi_event.data[2];
+        int8_t note = evin->midi_event.data[1];
+        int8_t data = evin->midi_event.data[2];
         if (note >= P2_NOTE_PAD_START && note <= P2_NOTE_PAD_END) {
-            // send grid key event
-            int x = ((note - P2_NOTE_PAD_START) % PUSH2_GRID_X  ) + (push2->grid_page * PUSH2_GRID_X);
-            int y = PUSH2_GRID_Y - ((note - P2_NOTE_PAD_START) / PUSH2_GRID_X) - 1;
-            union event_data *ev = event_data_new(EVENT_GRID_KEY);
-            ev->grid_key.id = push2->dev.id;
-            ev->grid_key.x = x ;
-            ev->grid_key.y = y;
-            ev->grid_key.state = (type == P2_MIDI_NOTE_ON) && (data > 0);
-            // fprintf(stderr, "key %d\t%d\t%d\t%d\n", ev->grid_key.id, ev->grid_key.x, ev->grid_key.y , ev->grid_key.state);
-            event_post(ev);
+            if (!push2->midi_mode) {
+                // send grid key event
+                int x = ((note - P2_NOTE_PAD_START) % PUSH2_GRID_X  ) + (push2->grid_page * PUSH2_GRID_X);
+                int y = PUSH2_GRID_Y - ((note - P2_NOTE_PAD_START) / PUSH2_GRID_X) - 1;
+                union event_data *ev = event_data_new(EVENT_GRID_KEY);
+                ev->grid_key.id = push2->dev.id;
+                ev->grid_key.x = x;
+                ev->grid_key.y = y;
+                ev->grid_key.state = (type == P2_MIDI_NOTE_ON) && (data > 0);
+                // fprintf(stderr, "key %d\t%d\t%d\t%d\n", ev->grid_key.id, ev->grid_key.x, ev->grid_key.y , ev->grid_key.state);
+                event_post(ev);
+            } else {
+                const int tonic = 0;
+                const int rowOffset = 5;
+                int x = (note - P2_NOTE_PAD_START) % PUSH2_GRID_X;
+                int y =  (note - P2_NOTE_PAD_START) / PUSH2_GRID_X;
+                int noteout =  note = (push2->midi_octave * 12)  + (y * rowOffset) + x + tonic;
+                evin->midi_event.data[1] = noteout;
+                // fprintf(stderr, "midi  0x%02x\t%d\t%d\n", evin->midi_event.data[0], evin->midi_event.data[1], evin->midi_event.data[2]);
+                event_post(evin);
+            }
             return;
         }
         break;
     }
     case P2_MIDI_CC: {
-        int8_t cc = ev->midi_event.data[1];
-        int8_t data = ev->midi_event.data[2];
+        int8_t cc = evin->midi_event.data[1];
+        int8_t data = evin->midi_event.data[2];
         if (cc >= P2_DEV_SELECT_CC_START  && cc <= P2_DEV_SELECT_CC_END) {
             if (cc <= P2_DEV_SELECT_CC_START + 2) {
                 int8_t button = cc - P2_DEV_SELECT_CC_START;
@@ -645,24 +691,62 @@ void push2_handle_midi(void* self, union event_data* ev) {
         } else {
             switch (cc) {
             case P2_PAGE_PREV : {
-                if (push2->grid_page > 0)  {
+                if (data && !push2->midi_mode && push2->grid_page > 0)  {
                     push2->grid_page--;
-                    dev_push2_midi_send_cc(self, P2_PAGE_PREV, (push2->grid_page > 0 ) * 0x7f);
-                    dev_push2_midi_send_cc(self, P2_PAGE_NEXT, (push2->grid_page < (GRID_X / PUSH2_GRID_X) - 1) * 0x7f);
-                    dev_push2_grid_refresh(self,true);
+                    dev_push2_midi_send_cc(self, P2_PAGE_PREV, (push2->grid_page > 0) ?  0x7f : 0x04);
+                    dev_push2_midi_send_cc(self, P2_PAGE_NEXT, (push2->grid_page < (GRID_X / PUSH2_GRID_X) - 1) ? 0x7f : 0x04);
+                    dev_push2_grid_refresh(self, true);
                 }
                 break;
             }
             case P2_PAGE_NEXT : {
-                if (push2->grid_page <  ((GRID_X / PUSH2_GRID_X) - 1))  {
+                if (data && !push2->midi_mode && push2->grid_page <  ((GRID_X / PUSH2_GRID_X) - 1))  {
                     push2->grid_page++;
-                    dev_push2_midi_send_cc(self, P2_PAGE_PREV, (push2->grid_page > 0 ) * 0x7f);
-                    dev_push2_midi_send_cc(self, P2_PAGE_NEXT, (push2->grid_page < (GRID_X / PUSH2_GRID_X) - 1) * 0x7f);
-                    dev_push2_grid_refresh(self,true);
+                    dev_push2_midi_send_cc(self, P2_PAGE_PREV, (push2->grid_page > 0) ?  0x7f : 0x04);
+                    dev_push2_midi_send_cc(self, P2_PAGE_NEXT, (push2->grid_page < (GRID_X / PUSH2_GRID_X) - 1) ? 0x7f : 0x04);
+                    dev_push2_grid_refresh(self, true);
                 }
                 break;
             }
+            case P2_OCTAVE_DOWN : {
+                if (data && push2->midi_mode) {
+                    if (push2->midi_octave > 0) {
+                        push2->midi_octave--;
+                        dev_push2_midi_send_cc(self, P2_OCTAVE_DOWN,    (!push2->midi_mode ? 0x00 : (push2->midi_octave > 0 ? 0x7f : 0x04)));
+                        dev_push2_midi_send_cc(self, P2_OCTAVE_UP,      (!push2->midi_mode ? 0x00 : (push2->midi_octave < 7 ? 0x7f : 0x04)));
+                    }
+                }
+                break;
+            }
+            case P2_OCTAVE_UP : {
+                if (data && push2->midi_mode) {
+                    if (push2->midi_octave < 7) {
+                        push2->midi_octave++;
+                        dev_push2_midi_send_cc(self, P2_OCTAVE_DOWN,    (!push2->midi_mode ? 0x00 : (push2->midi_octave > 0 ? 0x7f : 0x04)));
+                        dev_push2_midi_send_cc(self, P2_OCTAVE_UP,      (!push2->midi_mode ? 0x00 : (push2->midi_octave < 7 ? 0x7f : 0x04)));
+                    }
+                }
+                break;
+            }
+            case P2_LAYOUT : {
+                if (data) {
+                    push2->midi_mode = ! push2->midi_mode;
+                    dev_push2_midi_send_cc(self, P2_LAYOUT, push2->midi_mode ? 0x7f : 0x04);
+                    if (push2->midi_mode) {
+                        dev_push2_midi_send_cc(self, P2_PAGE_PREV, 0);
+                        dev_push2_midi_send_cc(self, P2_PAGE_NEXT, 0);
+                        dev_push2_grid_refresh(self, true);
 
+                    } else {
+                        dev_push2_midi_send_cc(self, P2_PAGE_PREV, (push2->grid_page > 0) ?  0x7f : 0x04);
+                        dev_push2_midi_send_cc(self, P2_PAGE_NEXT, (push2->grid_page < (GRID_X / PUSH2_GRID_X) - 1) ? 0x7f : 0x04);
+                        dev_push2_grid_refresh(self, true);
+                    }
+                    dev_push2_midi_send_cc(self, P2_OCTAVE_DOWN,    (!push2->midi_mode ? 0x00 : (push2->midi_octave > 0 ? 0x7f : 0x04)));
+                    dev_push2_midi_send_cc(self, P2_OCTAVE_UP,      (!push2->midi_mode ? 0x00 : (push2->midi_octave < 7 ? 0x7f : 0x04)));
+                }
+                break;
+            }
             }
         }
     }
