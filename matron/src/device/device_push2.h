@@ -25,10 +25,9 @@ struct dev_push2 {
 
     uint8_t *headerPkt_;
 
-    //todo, use dynamic alloc init/deinit
-    unsigned char dataPkt_[PUSH2_DATA_PKT_SZ];
-    unsigned char imgBuf_[PUSH2_DATA_PKT_SZ];
-    unsigned char imgBuf2_[PUSH2_DATA_PKT_SZ];
+    unsigned char *dataPkt_;
+    unsigned char *imgBuf_;
+    unsigned char *imgBuf2_;
 
 
     cairo_surface_t *surfacefb;
@@ -42,8 +41,9 @@ struct dev_push2 {
     snd_rawmidi_t *handle_out;
 
     // grid
-    uint8_t grid_state[8][8];
-    uint8_t grid_state_buf[8][8];
+    uint8_t* grid_state;
+    uint8_t* grid_state_buf;
+    uint8_t  grid_page;
 };
 
 extern int dev_push2_init(void *self);
