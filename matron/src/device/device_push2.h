@@ -44,6 +44,8 @@ struct dev_push2 {
     uint8_t* grid_state;
     uint8_t* grid_state_buf;
     uint8_t  grid_page;
+    bool     midi_mode;
+    uint8_t  midi_octave;
 };
 
 extern int dev_push2_init(void *self);
