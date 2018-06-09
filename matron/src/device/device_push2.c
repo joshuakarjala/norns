@@ -281,7 +281,7 @@ void* dev_push2_start(void *self) {
     int count = 0;
     while (push2->running_) {
         dev_push2_midi_read(self, msg_buf, &msg_pos, &msg_len);
-        if (count % 32) render(self); //~30fps
+        if ((count % 32) ==0) render(self); //~30fps
         usleep(1000); // 1ms
         count++;
     }
