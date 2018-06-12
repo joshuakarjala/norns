@@ -548,8 +548,10 @@ m.redraw[pMIX] = function()
 
   screen.level(1)
   screen.move(127,64)
-  if menu.alt == false then screen.text_right(norns.battery_percent)
-  else screen.text_right(norns.battery_current.."mA") end
+  if norns.battery_percent ~= nil and norns.battery_current ~= nil then
+      if menu.alt == false then screen.text_right(norns.battery_percent)
+      else screen.text_right(norns.battery_current.."mA") end
+   end
 
   screen.update()
 end

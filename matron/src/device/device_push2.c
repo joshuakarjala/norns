@@ -215,7 +215,7 @@ int dev_push2_init(void *self) {
 
     if (defaultPush2 == NULL) defaultPush2 = push2;
 
-    push2->midi_octave = 5;
+    push2->midi_octave = 1;
     push2->midi_mode = false;
     push2->grid_page = 0;
     push2->grid_state = calloc(GRID_X * GRID_Y, sizeof(uint8_t));
