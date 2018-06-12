@@ -24,17 +24,16 @@ struct dev_push2 {
     int endpointOut_;
 
     uint8_t *headerPkt_;
-
     unsigned char *dataPkt_;
-    unsigned char *imgBuf_;
-    unsigned char *imgBuf2_;
+
+    unsigned char *screenBuf_[2];
+	cairo_surface_t *screenSurface_[2];
+	cairo_t *screen_[2];
 
 
-    cairo_surface_t *surfacefb;
-    cairo_t *crfb;
-
-	cairo_surface_t *surface;
-	cairo_t *cr;
+    unsigned char *pushBuf_[2];
+    cairo_surface_t *pushDisplSurface_[2];
+    cairo_t *pushDispl_[2];
 
     // midi
     snd_rawmidi_t *handle_in;

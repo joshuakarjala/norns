@@ -36,6 +36,7 @@ void push2_register_lua(void* self);
 void dev_push2_grid_state(void* self, uint8_t x, uint8_t y, uint8_t z);
 void dev_push2_grid_state_all(void* self, uint8_t z);
 void dev_push2_grid_refresh(void* self, bool force);
+void push2d_init();
 
 #define GRID_X 16
 #define GRID_Y 8
@@ -75,20 +76,34 @@ void dev_push2_grid_refresh(void* self, bool force);
 #define P2_TRACK_SELECT_CC_START    20
 #define P2_TRACK_SELECT_CC_END      (P2_TRACK_SELECT_CC_START + 7)
 
+#define P2_SETUP_CC                  30
 #define P2_USER_CC                  59
 #define P2_DEVICE_CC                110
 #define P2_BROWSE_CC                111
 
-#define P2_OCTAVE_UP 55
-#define P2_OCTAVE_DOWN 54
-#define P2_PAGE_PREV 62
-#define P2_PAGE_NEXT 63
-#define P2_LAYOUT 31
+
+
+#define P2_CURSOR_RIGHT_CC 45
+#define P2_CURSOR_LEFT_CC 44
+#define P2_CURSOR_UP_CC 46
+#define P2_CURSOR_DOWN_CC 47
+
+
+#define P2_OCTAVE_UP_CC 55
+#define P2_OCTAVE_DOWN_CC 54
+#define P2_PAGE_PREV_CC 62
+#define P2_PAGE_NEXT_CC 63
+
+
+#define P2_LAYOUT_CC 31
 
 #define PAD_NOTE_ON_CLR (int8_t) 127
 #define PAD_NOTE_OFF_CLR (int8_t) 0
 #define PAD_NOTE_ROOT_CLR (int8_t) 41
 #define PAD_NOTE_IN_KEY_CLR (int8_t) 3
+
+#define P2_CLR_W_AVAIL 0x10
+#define P2_CLR_W_ON 0x7f
 
 
 static const uint16_t VID = 0x2982, PID = 0x1967;
@@ -160,53 +175,76 @@ int dev_push2_init(void *self) {
     }
 
 
-    // currently hardcode, later noet
     push2->cuckoo_ = true;
 
 
-    // screen
     push2->dataPkt_ = calloc(PUSH2_DATA_PKT_SZ, sizeof(unsigned char));
-    push2->imgBuf_ = calloc(PUSH2_DATA_PKT_SZ, sizeof(unsigned char));
-    push2->imgBuf2_ = calloc(PUSH2_DATA_PKT_SZ, sizeof(unsigned char));
-
-
+    memset(push2->dataPkt_, 0, PUSH2_DATA_PKT_SZ);
     push2->headerPkt_ = headerPkt;
     push2->handle_ = NULL;
     push2->iface_ = 0;
     push2->endpointOut_ = 1;
 
-    memset(push2->imgBuf_, 0, PUSH2_DATA_PKT_SZ);
-    memset(push2->imgBuf2_, 0, PUSH2_DATA_PKT_SZ);
-    memset(push2->dataPkt_, 0, PUSH2_DATA_PKT_SZ);
+    // screen
+    push2->screenBuf_[0] = calloc(PUSH2_DATA_PKT_SZ, sizeof(unsigned char));
+    push2->screenBuf_[1] = calloc(PUSH2_DATA_PKT_SZ, sizeof(unsigned char));
+    memset(push2->screenBuf_[0], 0, PUSH2_DATA_PKT_SZ);
+    memset(push2->screenBuf_[1], 0, PUSH2_DATA_PKT_SZ);
 
     // screen needs to be double buffered
-    push2->surfacefb = cairo_image_surface_create_for_data(
-                           (unsigned char*) push2->imgBuf_,
-                           CAIRO_FORMAT_RGB16_565,
-                           PUSH2_WIDTH,
-                           PUSH2_HEIGHT,
-                           PUSH2_LINE
-                       );
-    push2->crfb = cairo_create (push2->surfacefb);
+    push2->screenSurface_[0] = cairo_image_surface_create_for_data(
+                                   (unsigned char*) push2->screenBuf_[0],
+                                   CAIRO_FORMAT_RGB16_565,
+                                   PUSH2_WIDTH,
+                                   PUSH2_HEIGHT,
+                                   PUSH2_LINE
+                               );
+    push2->screen_[0] = cairo_create (push2->screenSurface_[0]);
 
-    push2->surface = cairo_image_surface_create_for_data(
-                         (unsigned char*) push2->imgBuf2_,
-                         CAIRO_FORMAT_RGB16_565,
-                         PUSH2_WIDTH,
-                         PUSH2_HEIGHT,
-                         PUSH2_LINE
-                     );
-    push2->cr = cairo_create (push2->surface);
-
-
-
-    cairo_set_operator(push2->crfb, CAIRO_OPERATOR_SOURCE);
-    cairo_set_source_surface(push2->crfb, push2->surface, 0, 0);
+    push2->screenSurface_[1] = cairo_image_surface_create_for_data(
+                                   (unsigned char*) push2->screenBuf_[1],
+                                   CAIRO_FORMAT_RGB16_565,
+                                   PUSH2_WIDTH,
+                                   PUSH2_HEIGHT,
+                                   PUSH2_LINE
+                               );
+    push2->screen_[1] = cairo_create (push2->screenSurface_[1]);
+    cairo_scale(push2->screen_[1], 2.0f, 2.0f);
 
     if (push2->cuckoo_) {
-        screen_cr((void*) push2->cr, (void*) push2->crfb);
-        cairo_scale(push2->cr, 2.0f, 2.0f);
+        screen_cr((void*) push2->screen_[1], (void*) push2->screen_[0]);
     }
+    cairo_set_operator(push2->screen_[0], CAIRO_OPERATOR_SOURCE);
+    cairo_set_source_surface(push2->screen_[0], push2->screenSurface_[1], 0, 0);
+
+    // push 2 native mode
+    push2->pushBuf_[0] = calloc(PUSH2_DATA_PKT_SZ, sizeof(unsigned char));
+    push2->pushBuf_[1] = calloc(PUSH2_DATA_PKT_SZ, sizeof(unsigned char));
+    memset(push2->pushBuf_[0], 0, PUSH2_DATA_PKT_SZ);
+    memset(push2->pushBuf_[1], 0, PUSH2_DATA_PKT_SZ);
+    // screen needs to be double buffered
+    push2->pushDisplSurface_[0] = cairo_image_surface_create_for_data(
+                                      (unsigned char*) push2->pushBuf_[0],
+                                      CAIRO_FORMAT_RGB16_565,
+                                      PUSH2_WIDTH,
+                                      PUSH2_HEIGHT,
+                                      PUSH2_LINE
+                                  );
+    push2->pushDispl_[0] = cairo_create (push2->pushDisplSurface_[0]);
+
+    push2->pushDisplSurface_[1] = cairo_image_surface_create_for_data(
+                                      (unsigned char*) push2->pushBuf_[1],
+                                      CAIRO_FORMAT_RGB16_565,
+                                      PUSH2_WIDTH,
+                                      PUSH2_HEIGHT,
+                                      PUSH2_LINE
+                                  );
+    push2->pushDispl_[1] = cairo_create (push2->pushDisplSurface_[1]);
+
+    push2d_init(self);
+    cairo_set_operator(push2->pushDispl_[0], CAIRO_OPERATOR_SOURCE);
+    cairo_set_source_surface(push2->pushDispl_[0], push2->pushDisplSurface_[1], 0, 0);
+
 
     init(self);
 
@@ -223,12 +261,16 @@ int dev_push2_init(void *self) {
     memset(push2->grid_state, 0, GRID_X * GRID_Y * sizeof(uint8_t));
     memset(push2->grid_state_buf, 0, GRID_X * GRID_Y * sizeof(uint8_t));
 
-    dev_push2_midi_send_cc(self, P2_OCTAVE_DOWN,    (!push2->midi_mode ? 0x00 : (push2->midi_octave > 0 ? 0x7f : 0x04)));
-    dev_push2_midi_send_cc(self, P2_OCTAVE_UP,      (!push2->midi_mode ? 0x00 : (push2->midi_octave < 7 ? 0x7f : 0x04)));
+    dev_push2_midi_send_cc(self, P2_OCTAVE_DOWN_CC,    (!push2->midi_mode ? 0x00 : (push2->midi_octave > 0 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
+    dev_push2_midi_send_cc(self, P2_OCTAVE_UP_CC,      (!push2->midi_mode ? 0x00 : (push2->midi_octave < 7 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
 
-    dev_push2_midi_send_cc(self, P2_PAGE_PREV, (push2->grid_page > 0) ?  0x7f : 0x04);
-    dev_push2_midi_send_cc(self, P2_PAGE_NEXT, (push2->grid_page < (GRID_X / PUSH2_GRID_X) - 1) ? 0x7f : 0x04);
-    dev_push2_midi_send_cc(self, P2_LAYOUT, push2->midi_mode ? 0x7f : 0x04);
+    dev_push2_midi_send_cc(self, P2_CURSOR_LEFT_CC, (push2->grid_page > 0) ?  P2_CLR_W_ON : P2_CLR_W_AVAIL);
+    dev_push2_midi_send_cc(self, P2_CURSOR_RIGHT_CC, (push2->grid_page < (GRID_X / PUSH2_GRID_X) - 1) ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
+    dev_push2_midi_send_cc(self, P2_LAYOUT_CC, push2->midi_mode ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
+
+
+    dev_push2_midi_send_cc(self, P2_USER_CC, push2->cuckoo_ ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
+    dev_push2_midi_send_cc(self, P2_SETUP_CC, push2->cuckoo_ ? 0 : P2_CLR_W_AVAIL);
 
     dev_push2_grid_state_all(push2, 0);
     dev_push2_grid_refresh(self, true);
@@ -255,13 +297,19 @@ void dev_push2_deinit(void *self) {
 
     // screen
     deinit(self);
-    cairo_destroy (push2->cr);
-    cairo_surface_destroy (push2->surface);
-    cairo_destroy (push2->crfb);
-    cairo_surface_destroy (push2->surfacefb);
+    cairo_destroy (push2->screen_[1]);
+    cairo_surface_destroy (push2->screenSurface_[1]);
+    cairo_destroy (push2->screen_[0]);
+    cairo_surface_destroy (push2->screenSurface_[0]);
+    cairo_destroy (push2->pushDispl_[1]);
+    cairo_surface_destroy (push2->pushDisplSurface_[1]);
+    cairo_destroy (push2->pushDispl_[0]);
+    cairo_surface_destroy (push2->pushDisplSurface_[0]);
 
-    if (push2->imgBuf_) {free(push2->imgBuf_); push2->imgBuf_ = NULL;}
-    if (push2->imgBuf2_) {free(push2->imgBuf2_); push2->imgBuf2_ = NULL;}
+    if (push2->screenBuf_[0]) {free(push2->screenBuf_[0]); push2->screenBuf_[0] = NULL;}
+    if (push2->screenBuf_[1]) {free(push2->screenBuf_[1]); push2->screenBuf_[1] = NULL;}
+    if (push2->pushBuf_[0]) {free(push2->pushBuf_[0]); push2->pushBuf_[0] = NULL;}
+    if (push2->pushBuf_[1]) {free(push2->pushBuf_[1]); push2->pushBuf_[1] = NULL;}
     if (push2->dataPkt_) {free(push2->dataPkt_); push2->grid_state = NULL;}
     if (push2->grid_state) {free(push2->grid_state); push2->dataPkt_ = NULL;}
     if (push2->grid_state_buf) {free(push2->grid_state_buf); push2->grid_state_buf = NULL;}
@@ -281,7 +329,7 @@ void* dev_push2_start(void *self) {
     int count = 0;
     while (push2->running_) {
         dev_push2_midi_read(self, msg_buf, &msg_pos, &msg_len);
-        if ((count % 32) ==0) render(self); //~30fps
+        if ((count % 32) == 0) render(self); //~30fps
         usleep(1000); // 1ms
         count++;
     }
@@ -297,16 +345,18 @@ int render(void *self ) {
     if (push2->handle_ == NULL) return -1;
     int tfrsize = 0;
     int r = 0;
+    unsigned char* scrbuf = push2->screenBuf_[0];
+    if (!push2->cuckoo_) scrbuf = push2->pushBuf_[0];
 
     for (int y = 0; y < PUSH2_HEIGHT; y++) {
         for (int x = 0; x < PUSH2_LINE; x += 4) {
             int pixelOffset = (y * PUSH2_LINE) + x;
             int destinationOffset = (y * PUSH2_LINE) + x;
             // mask 0xFFE7F3E7
-            push2->dataPkt_[destinationOffset]   = push2->imgBuf_[pixelOffset]   ^ 0xE7;
-            push2->dataPkt_[destinationOffset + 1] = push2->imgBuf_[pixelOffset + 1] ^ 0xF3;
-            push2->dataPkt_[destinationOffset + 2] = push2->imgBuf_[pixelOffset + 2] ^ 0xE7;
-            push2->dataPkt_[destinationOffset + 3] = push2->imgBuf_[pixelOffset + 3] ^ 0xFF;
+            push2->dataPkt_[destinationOffset]   = scrbuf[pixelOffset]   ^ 0xE7;
+            push2->dataPkt_[destinationOffset + 1] = scrbuf[pixelOffset + 1] ^ 0xF3;
+            push2->dataPkt_[destinationOffset + 2] = scrbuf[pixelOffset + 2] ^ 0xE7;
+            push2->dataPkt_[destinationOffset + 3] = scrbuf[pixelOffset + 3] ^ 0xFF;
         }
     }
 
@@ -321,9 +371,9 @@ int render(void *self ) {
 void clear(void*self) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
 
-    memset(push2->imgBuf_, 0, PUSH2_DATA_PKT_SZ);
-    cairo_set_source_rgb (push2->cr, 0, 0, 0);
-    cairo_paint (push2->cr);
+    memset(push2->screenBuf_[0], 0, PUSH2_DATA_PKT_SZ);
+    cairo_set_source_rgb (push2->screen_[1], 0, 0, 0);
+    cairo_paint (push2->screen_[1]);
 }
 
 int init(void *self) {
@@ -419,6 +469,285 @@ void dev_push2_grid_refresh(void* self, bool force) {
     }
 }
 
+
+
+
+//=========================================================================================
+// MIDI
+void dev_push2_midi_read(void *self, uint8_t* msg_buf, uint8_t* msg_pos, uint8_t* msg_len) {
+    struct dev_push2 *push2 = (struct dev_push2 *) self;
+    union event_data *ev;
+
+    ssize_t read = 0;
+    uint8_t byte = 0;
+
+    do {
+        read = snd_rawmidi_read(push2->handle_in, &byte, 1);
+
+        if (byte >= 0x80) {
+            // control byte
+            msg_buf[0] = byte;
+            *msg_pos = 1;
+
+            switch (byte & 0xf0) {
+            case P2_MIDI_NOTE_ON:
+            case P2_MIDI_NOTE_OFF:
+            case P2_MIDI_POLY_AT:
+            case P2_MIDI_CC:
+            case P2_MIDI_PB: {
+                *msg_len = 3;
+                break;
+            }
+            case P2_MIDI_CHAN_PR:
+            case P2_MIDI_PGM: {
+                *msg_len = 2;
+                break;
+            }
+            case P2_MIDI_OTHER: {
+                switch (byte & 0x0f) {
+                case 0x01: // midi time code
+                case 0x03: // song selec
+                    *msg_len = 2;
+                    break;
+                case 0x02 :
+                    *msg_len = 3;
+                    break;
+                case 0x07: // sysex end
+                    // TODO: properly handle sysex length
+                    *msg_len = *msg_pos; // sysex end
+                    break;
+                case 0x00: // sysex start
+                    *msg_len = 0;
+                    break;
+                case 0x08:
+                    *msg_len = 1;
+                    break;
+                default:
+                    *msg_len = 2;
+                    break;
+                }
+                break;
+            }
+            default: {
+                *msg_len = 2;
+                break;
+            }
+            } //case
+        } else {
+            // data byes
+            msg_buf[*msg_pos] = byte;
+            *msg_pos = *msg_pos + 1;
+        }
+
+        if (*msg_pos == *msg_len) {
+            ev = event_data_new(EVENT_MIDI_EVENT);
+            ev->midi_event.id = push2->dev.id;
+            ev->midi_event.data[0] = msg_buf[0];
+            ev->midi_event.data[1] = *msg_len > 1 ? msg_buf[1] : 0;
+            ev->midi_event.data[2] = *msg_len > 2 ? msg_buf[2] : 0;
+            ev->midi_event.nbytes = *msg_len;
+            push2_handle_midi(self, ev);
+            *msg_pos = 0;
+            *msg_len = 0;
+        }
+    } while (read > 0);
+}
+
+void push2_handle_midi(void* self, union event_data* evin) {
+    struct dev_push2 *push2 = (struct dev_push2 *) self;
+
+    uint8_t type = evin->midi_event.data[0] & 0xF0;
+
+    if (type == P2_MIDI_CC) {
+        int8_t cc = evin->midi_event.data[1];
+        int8_t data = evin->midi_event.data[2];
+        if (cc == P2_USER_CC && data > 0) {
+            push2->cuckoo_ = ! push2->cuckoo_;
+            dev_push2_midi_send_cc(self, P2_USER_CC,  push2->cuckoo_ ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
+            dev_push2_midi_send_cc(self, P2_SETUP_CC, push2->cuckoo_ ? 0 : P2_CLR_W_AVAIL);
+            return;
+        }
+        if (cc == P2_SETUP_CC) {
+            // setup acts as norns button 1
+            union event_data *ev = event_data_new(EVENT_KEY);
+            ev->enc.n = 1;
+            ev->enc.delta = (data > 0);
+            // perr("norns button %d %d\n", ev->enc.n, ev->enc.delta);
+            event_post(ev);
+            return;
+
+        }
+    }
+
+    if (!push2->cuckoo_) {
+        event_post(evin);
+        return;
+    }
+
+    static struct timespec encoderthin[8];
+
+    // uint8_t ch = ev->midi_event.data[0] & 0x0F;
+    // determine if midi message is going to be interpretted or just sent on
+    switch (type) {
+    case P2_MIDI_NOTE_ON:
+    case P2_MIDI_NOTE_OFF: {
+        int8_t note = evin->midi_event.data[1];
+        int8_t data = evin->midi_event.data[2];
+        if (note >= P2_NOTE_PAD_START && note <= P2_NOTE_PAD_END) {
+            if (!push2->midi_mode) {
+                // send grid key event
+                int x = ((note - P2_NOTE_PAD_START) % PUSH2_GRID_X  ) + (push2->grid_page * PUSH2_GRID_X);
+                int y = PUSH2_GRID_Y - ((note - P2_NOTE_PAD_START) / PUSH2_GRID_X) - 1;
+                union event_data *ev = event_data_new(EVENT_GRID_KEY);
+                ev->grid_key.id = push2->dev.id;
+                ev->grid_key.x = x;
+                ev->grid_key.y = y;
+                ev->grid_key.state = (type == P2_MIDI_NOTE_ON) && (data > 0);
+                // fprintf(stderr, "key %d\t%d\t%d\t%d\n", ev->grid_key.id, ev->grid_key.x, ev->grid_key.y , ev->grid_key.state);
+                event_post(ev);
+            } else {
+                const int tonic = 0;
+                const int rowOffset = 5;
+                int x = (note - P2_NOTE_PAD_START) % PUSH2_GRID_X;
+                int y =  (note - P2_NOTE_PAD_START) / PUSH2_GRID_X;
+                int noteout =  note = (push2->midi_octave * 12)  + (y * rowOffset) + x + tonic;
+                evin->midi_event.data[1] = noteout;
+                // fprintf(stderr, "midi  0x%02x\t%d\t%d\n", evin->midi_event.data[0], evin->midi_event.data[1], evin->midi_event.data[2]);
+                event_post(evin);
+            }
+            return;
+        }
+        break;
+    }
+    case P2_MIDI_CC: {
+        int8_t cc = evin->midi_event.data[1];
+        int8_t data = evin->midi_event.data[2];
+        if (cc >= P2_DEV_SELECT_CC_START  && cc <= P2_DEV_SELECT_CC_END) {
+            if (cc <= P2_DEV_SELECT_CC_START + 2) {
+                int8_t button = cc - P2_DEV_SELECT_CC_START;
+                // send norns button evt
+                union event_data *ev = event_data_new(EVENT_KEY);
+                ev->enc.n = button + 1;
+                ev->enc.delta = (data > 0);
+                // perr("norns button %d %d\n", ev->enc.n, ev->enc.delta);
+                event_post(ev);
+                return;
+            }
+        } else if (cc >= P2_ENCODER_CC_START  && cc <= P2_ENCODER_CC_END) {
+            if (cc <= P2_ENCODER_CC_START + 2) {
+                // send norns encoder evt
+                int8_t enc = cc - P2_ENCODER_CC_START;
+
+                int v = data > 0x40 ? -1 : 1;
+                // int v = data > 0x40 ? (0x80 - data) * -1 : data;
+                // perr("norns encoder %d %04x %d\n", enc, data, v);
+
+                struct timespec now;
+                clock_gettime(CLOCK_MONOTONIC, &now); // get initial time-stamp
+
+                double diffns = (double)(now.tv_sec - encoderthin[enc].tv_sec) * 1.0e9 +
+                                (double)(now.tv_nsec - encoderthin[enc].tv_nsec);
+
+                if (diffns > 1000000) {
+                    encoderthin[enc] = now;
+                    union event_data *ev = event_data_new(EVENT_ENC);
+                    ev->enc.n = enc + 1;
+                    ev->enc.delta = v;
+                    // perr("norns encoder %d %d\n", ev->enc.n, ev->enc.delta);
+                    event_post(ev);
+                    return;
+                }
+            }
+        } else {
+            switch (cc) {
+            case P2_CURSOR_LEFT_CC : {
+                if (data && !push2->midi_mode && push2->grid_page > 0)  {
+                    push2->grid_page--;
+                    dev_push2_midi_send_cc(self, P2_CURSOR_LEFT_CC, (push2->grid_page > 0) ?  P2_CLR_W_ON : P2_CLR_W_AVAIL);
+                    dev_push2_midi_send_cc(self, P2_CURSOR_RIGHT_CC, (push2->grid_page < (GRID_X / PUSH2_GRID_X) - 1) ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
+                    dev_push2_grid_refresh(self, true);
+                }
+                break;
+            }
+            case P2_CURSOR_RIGHT_CC : {
+                if (data && !push2->midi_mode && push2->grid_page <  ((GRID_X / PUSH2_GRID_X) - 1))  {
+                    push2->grid_page++;
+                    dev_push2_midi_send_cc(self, P2_CURSOR_LEFT_CC, (push2->grid_page > 0) ?  P2_CLR_W_ON : P2_CLR_W_AVAIL);
+                    dev_push2_midi_send_cc(self, P2_CURSOR_RIGHT_CC, (push2->grid_page < (GRID_X / PUSH2_GRID_X) - 1) ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
+                    dev_push2_grid_refresh(self, true);
+                }
+                break;
+            }
+            case P2_OCTAVE_DOWN_CC : {
+                if (data && push2->midi_mode) {
+                    if (push2->midi_octave > 0) {
+                        push2->midi_octave--;
+                        dev_push2_midi_send_cc(self, P2_OCTAVE_DOWN_CC,    (!push2->midi_mode ? 0x00 : (push2->midi_octave > 0 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
+                        dev_push2_midi_send_cc(self, P2_OCTAVE_UP_CC,      (!push2->midi_mode ? 0x00 : (push2->midi_octave < 7 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
+                    }
+                }
+                break;
+            }
+            case P2_OCTAVE_UP_CC : {
+                if (data && push2->midi_mode) {
+                    if (push2->midi_octave < 7) {
+                        push2->midi_octave++;
+                        dev_push2_midi_send_cc(self, P2_OCTAVE_DOWN_CC,    (!push2->midi_mode ? 0x00 : (push2->midi_octave > 0 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
+                        dev_push2_midi_send_cc(self, P2_OCTAVE_UP_CC,      (!push2->midi_mode ? 0x00 : (push2->midi_octave < 7 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
+                    }
+                }
+                break;
+            }
+            case P2_LAYOUT_CC : {
+                if (data) {
+                    push2->midi_mode = ! push2->midi_mode;
+                    dev_push2_midi_send_cc(self, P2_LAYOUT_CC, push2->midi_mode ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
+                    if (push2->midi_mode) {
+                        dev_push2_midi_send_cc(self, P2_CURSOR_LEFT_CC, 0);
+                        dev_push2_midi_send_cc(self, P2_CURSOR_RIGHT_CC, 0);
+                        dev_push2_grid_refresh(self, true);
+
+                    } else {
+                        dev_push2_midi_send_cc(self, P2_CURSOR_LEFT_CC, (push2->grid_page > 0) ?  P2_CLR_W_ON : P2_CLR_W_AVAIL);
+                        dev_push2_midi_send_cc(self, P2_CURSOR_RIGHT_CC, (push2->grid_page < (GRID_X / PUSH2_GRID_X) - 1) ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
+                        dev_push2_grid_refresh(self, true);
+                    }
+                    dev_push2_midi_send_cc(self, P2_OCTAVE_DOWN_CC,    (!push2->midi_mode ? 0x00 : (push2->midi_octave > 0 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
+                    dev_push2_midi_send_cc(self, P2_OCTAVE_UP_CC,      (!push2->midi_mode ? 0x00 : (push2->midi_octave < 7 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
+                }
+                break;
+            }
+            }
+        }
+    }
+    default: {
+        ;
+    }
+
+    }
+}
+
+ssize_t dev_push2_midi_send(void *self, uint8_t *data, size_t n) {
+    struct dev_push2 *push2 = (struct dev_push2 *) self;
+    return snd_rawmidi_write(push2->handle_out, data, n);
+}
+
+
+void dev_push2_midi_send_note(void *self, uint8_t note, uint8_t vel) {
+    uint8_t msg[3] = {P2_MIDI_NOTE_ON, note, vel};
+    dev_push2_midi_send(self, msg, sizeof(msg));
+}
+
+void dev_push2_midi_send_cc(void *self, uint8_t cc, uint8_t v) {
+    uint8_t msg[3] = {P2_MIDI_CC, cc, v};
+    dev_push2_midi_send(self, msg, sizeof(msg));
+}
+
+//=========================================================================================
+// LUA
+//=========================================================================================
+
+// Monone grid ============================================================================
 /***
  * grid: set led
  * @function grid_set_led
@@ -513,6 +842,392 @@ int push2_grid_cols(lua_State *l) {
     return 1;
 }
 
+// Native display
+
+
+
+#define NUM_FONTS 14
+static char font_path[NUM_FONTS][32];
+static cairo_font_face_t *ct[NUM_FONTS];
+static FT_Library value;
+static FT_Error status;
+static FT_Face face[NUM_FONTS];
+
+void push2d_init(void* self) {
+    struct dev_push2 *dev = (struct dev_push2 *) self;
+    status = FT_Init_FreeType(&value);
+    if (status != 0) {
+        fprintf(stderr, "ERROR (pish2) freetype init\n");
+        return;
+    }
+
+    strcpy(font_path[0], "04B_03__.TTF");
+    strcpy(font_path[1], "liquid.ttf");
+    strcpy(font_path[2], "Roboto-Thin.ttf");
+    strcpy(font_path[3], "Roboto-Light.ttf");
+    strcpy(font_path[4], "Roboto-Regular.ttf");
+    strcpy(font_path[5], "Roboto-Medium.ttf");
+    strcpy(font_path[6], "Roboto-Bold.ttf");
+    strcpy(font_path[7], "Roboto-Black.ttf");
+    strcpy(font_path[8], "Roboto-ThinItalic.ttf");
+    strcpy(font_path[9], "Roboto-LightItalic.ttf");
+    strcpy(font_path[10], "Roboto-Italic.ttf");
+    strcpy(font_path[11], "Roboto-MediumItalic.ttf");
+    strcpy(font_path[12], "Roboto-BoldItalic.ttf");
+    strcpy(font_path[13], "Roboto-BlackItalic.ttf");
+
+    char filename[256];
+
+    for (int i = 0; i < NUM_FONTS; i++) {
+        // FIXME should be path relative to norns/
+        snprintf(filename, 256, "%s/norns/resources/%s", getenv("HOME"), font_path[i]);
+
+        status = FT_New_Face(value, filename, 0, &face[i]);
+        if (status != 0) {
+            fprintf(stderr, "ERROR (push2) font load: %s\n", filename);
+            return;
+        }
+        else {
+            ct[i] = cairo_ft_font_face_create_for_ft_face(face[i], 0);
+        }
+    }
+
+
+
+    cairo_set_operator(dev->pushDispl_[1], CAIRO_OPERATOR_CLEAR);
+    cairo_paint(dev->pushDispl_[1]);
+    cairo_set_operator(dev->pushDispl_[1], CAIRO_OPERATOR_OVER);
+
+    cairo_font_options_t *font_options;
+    font_options = cairo_font_options_create();
+    cairo_font_options_set_antialias(font_options, CAIRO_ANTIALIAS_SUBPIXEL);
+
+    cairo_set_font_face (dev->pushDispl_[1], ct[0]);
+    cairo_set_font_options(dev->pushDispl_[1], font_options);
+    cairo_set_font_size(dev->pushDispl_[1], 8.0);
+}
+
+
+
+int _push2d_font_face(lua_State *l) {
+    if (lua_gettop(l) != 2) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    struct dev_push2 *dev = lua_touserdata(l, 1);
+
+    int x = (int) luaL_checkinteger(l, 2);
+    if ( (x >= 0) && (x < NUM_FONTS) ) {
+        cairo_set_font_face(dev->pushDispl_[1], ct[x]);
+    }
+    lua_settop(l, 0);
+    return 0;
+}
+
+int _push2d_font_size(lua_State *l) {
+    if (lua_gettop(l) != 2) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    struct dev_push2 *dev = lua_touserdata(l, 1);
+    int z = (int) luaL_checkinteger(l, 2);
+    cairo_set_font_size(dev->pushDispl_[1], z);
+    lua_settop(l, 0);
+    return 0;
+}
+
+
+int _push2d_aa(lua_State *l) {
+    if (lua_gettop(l) != 2) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    struct dev_push2 *dev = lua_touserdata(l, 1);
+
+    int s = (int) luaL_checkinteger(l, 2);
+    if (s == 0) {
+        cairo_set_antialias(dev->pushDispl_[1], CAIRO_ANTIALIAS_NONE);
+    } else {
+        cairo_set_antialias(dev->pushDispl_[1], CAIRO_ANTIALIAS_DEFAULT);
+    }
+    lua_settop(l, 0);
+    return 0;
+}
+
+int _push2d_colour(lua_State *l) {
+    if (lua_gettop(l) != 4) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    struct dev_push2 *dev = lua_touserdata(l, 1);
+    double r =  luaL_checknumber(l, 2);
+    double g =  luaL_checknumber(l, 3);
+    double b =  luaL_checknumber(l, 4);
+    // push2 is BGR - not RGB
+    cairo_set_source_rgb(dev->pushDispl_[1], b, g, r);
+    lua_settop(l, 0);
+    return 0;
+}
+
+int _push2d_line_width(lua_State *l) {
+    if (lua_gettop(l) != 2) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    struct dev_push2 *dev = lua_touserdata(l, 1);
+    double w = luaL_checknumber(l, 2);
+    cairo_set_line_width(dev->pushDispl_[1], w);
+    lua_settop(l, 0);
+    return 0;
+}
+
+int _push2d_move(lua_State *l) {
+    if (lua_gettop(l) != 3) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    struct dev_push2 *dev = lua_touserdata(l, 1);
+
+    double x = luaL_checknumber(l, 2);
+    double y = luaL_checknumber(l, 3);
+    cairo_move_to(dev->pushDispl_[1], x + 0.5, y + 0.5);
+    lua_settop(l, 0);
+    return 0;
+}
+
+int _push2d_line(lua_State *l) {
+    if (lua_gettop(l) != 3) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    struct dev_push2 *dev = lua_touserdata(l, 1);
+    double x = luaL_checkinteger(l, 2);
+    double y = luaL_checkinteger(l, 3);
+    cairo_line_to(dev->pushDispl_[1], x + 0.5, y + 0.5);
+    lua_settop(l, 0);
+    return 0;
+}
+
+int _push2d_move_rel(lua_State *l) {
+    if (lua_gettop(l) != 3) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    struct dev_push2 *dev = lua_touserdata(l, 1);
+    double x = luaL_checknumber(l, 2);
+    double y = luaL_checknumber(l, 3);
+    cairo_rel_move_to(dev->pushDispl_[1], x + 0.5, y + 0.5);
+    lua_settop(l, 0);
+    return 0;
+}
+
+int _push2d_line_rel(lua_State *l) {
+    if (lua_gettop(l) != 3) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    struct dev_push2 *dev = lua_touserdata(l, 1);
+    double x = (int) luaL_checknumber(l, 2);
+    double y = (int) luaL_checknumber(l, 3);
+    cairo_rel_line_to(dev->pushDispl_[1], x + 0.5, y + 0.5);
+    lua_settop(l, 0);
+    return 0;
+}
+
+int _push2d_curve(lua_State *l) {
+    if (lua_gettop(l) != 7) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    struct dev_push2 *dev = lua_touserdata(l, 1);
+    double x1 = luaL_checknumber(l, 2);
+    double y1 = luaL_checknumber(l, 3);
+    double x2 = luaL_checknumber(l, 4);
+    double y2 = luaL_checknumber(l, 5);
+    double x3 = luaL_checknumber(l, 6);
+    double y3 = luaL_checknumber(l, 7);
+    cairo_curve_to(dev->pushDispl_[1], x1, y1, x2, y2, x3, y3);
+    lua_settop(l, 0);
+    return 0;
+}
+
+int _push2d_curve_rel(lua_State *l) {
+    if (lua_gettop(l) != 7) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    struct dev_push2 *dev = lua_touserdata(l, 1);
+    double x1 = luaL_checknumber(l, 2);
+    double y1 = luaL_checknumber(l, 3);
+    double x2 = luaL_checknumber(l, 4);
+    double y2 = luaL_checknumber(l, 5);
+    double x3 = luaL_checknumber(l, 6);
+    double y3 = luaL_checknumber(l, 7);
+    cairo_rel_curve_to(dev->pushDispl_[1], x1, y1, x2, y2, x3, y3);
+    lua_settop(l, 0);
+    return 0;
+}
+
+int _push2d_arc(lua_State *l) {
+    if (lua_gettop(l) != 6) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    struct dev_push2 *dev = lua_touserdata(l, 1);
+
+    double x = luaL_checknumber(l, 2);
+    double y = luaL_checknumber(l, 3);
+    double r = luaL_checknumber(l, 4);
+    double a1 = luaL_checknumber(l, 5);
+    double a2 = luaL_checknumber(l, 6);
+    cairo_arc(dev->pushDispl_[1], x + 0.5, y + 0.5, r, a1, a2);
+    lua_settop(l, 0);
+    return 0;
+}
+
+int _push2d_rect(lua_State *l) {
+    if (lua_gettop(l) != 5) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    struct dev_push2 *dev = lua_touserdata(l, 1);
+
+    double x = luaL_checknumber(l, 2);
+    double y = luaL_checknumber(l, 3);
+    double w = luaL_checknumber(l, 4);
+    double h = luaL_checknumber(l, 5);
+    cairo_rectangle(dev->pushDispl_[1], x + 0.5, y + 0.5, w, h);
+    lua_settop(l, 0);
+    return 0;
+}
+
+int _push2d_stroke(lua_State *l) {
+    if (lua_gettop(l) != 1) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    struct dev_push2 *dev = lua_touserdata(l, 1);
+
+    cairo_stroke(dev->pushDispl_[1]);
+    lua_settop(l, 0);
+    return 0;
+}
+
+int _push2d_fill(lua_State *l) {
+    if (lua_gettop(l) != 1) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    struct dev_push2 *dev = lua_touserdata(l, 1);
+
+    cairo_fill(dev->pushDispl_[1]);
+    lua_settop(l, 0);
+    return 0;
+}
+
+int _push2d_text(lua_State *l) {
+    if (lua_gettop(l) != 2) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    struct dev_push2 *dev = lua_touserdata(l, 1);
+
+    const char *s = luaL_checkstring(l, 2);
+    cairo_show_text(dev->pushDispl_[1], s);
+    lua_settop(l, 0);
+    return 0;
+}
+
+int _push2d_clear(lua_State *l) {
+    if (lua_gettop(l) != 1) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    struct dev_push2 *dev = lua_touserdata(l, 1);
+
+    cairo_set_operator(dev->pushDispl_[1], CAIRO_OPERATOR_CLEAR);
+    cairo_paint(dev->pushDispl_[1]);
+    cairo_set_operator(dev->pushDispl_[1], CAIRO_OPERATOR_OVER);
+    lua_settop(l, 0);
+    return 0;
+}
+
+int _push2d_close(lua_State *l) {
+    if (lua_gettop(l) != 1) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    struct dev_push2 *dev = lua_touserdata(l, 1);
+
+    cairo_close_path(dev->pushDispl_[1]);
+    lua_settop(l, 0);
+    return 0;
+}
+
+int _push2d_extents(lua_State *l) {
+    static double text_xy[2];
+    if (lua_gettop(l) != 2) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    struct dev_push2 *dev = lua_touserdata(l, 1);
+
+    const char *s = luaL_checkstring(l, 2);
+    cairo_text_extents_t extents;
+    cairo_text_extents(dev->pushDispl_[1], s, &extents);
+    text_xy[0] = extents.width;
+    text_xy[1] = extents.height;
+    lua_pushinteger(l, text_xy[0]);
+    lua_pushinteger(l, text_xy[1]);
+    return 2;
+}
+
+
+
+int _push2d_update(lua_State *l) {
+    if (lua_gettop(l) == 0) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    struct dev_push2 *push2 = lua_touserdata(l, 1);
+
+    if (push2 == defaultPush2) {
+        defaultPush2->cuckoo_ = false;
+        dev_push2_midi_send_cc(push2, P2_USER_CC,  push2->cuckoo_ ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
+        dev_push2_midi_send_cc(push2, P2_SETUP_CC, push2->cuckoo_ ? 0 : P2_CLR_W_AVAIL);
+    }
+
+    cairo_paint(push2->pushDispl_[0]);
+    lua_settop(l, 0);
+    return 0;
+}
+
+// screen
+int _push2_screen_update(lua_State *l) {
+    if (lua_gettop(l) != 0) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+
+    defaultPush2->cuckoo_ = true;
+    dev_push2_midi_send_cc(defaultPush2, P2_USER_CC,  defaultPush2->cuckoo_ ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
+    dev_push2_midi_send_cc(defaultPush2, P2_SETUP_CC, defaultPush2->cuckoo_ ? 0 : P2_CLR_W_AVAIL);
+
+    screen_update();
+    lua_settop(l, 0);
+    return 0;
+}
+
+//=========================================================================================
+// Register lua
 void push2_register_lua(void *self) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
 
@@ -523,252 +1238,29 @@ void push2_register_lua(void *self) {
         lua_register(lvm, "grid_refresh", &push2_grid_refresh);
         lua_register(lvm, "grid_rows", &push2_grid_rows);
         lua_register(lvm, "grid_cols", &push2_grid_cols);
-    }
-}
 
-void dev_push2_midi_read(void *self, uint8_t* msg_buf, uint8_t* msg_pos, uint8_t* msg_len) {
-    struct dev_push2 *push2 = (struct dev_push2 *) self;
-    union event_data *ev;
 
-    ssize_t read = 0;
-    uint8_t byte = 0;
-
-    do {
-        read = snd_rawmidi_read(push2->handle_in, &byte, 1);
-
-        if (byte >= 0x80) {
-            // control byte
-            msg_buf[0] = byte;
-            *msg_pos = 1;
-
-            switch (byte & 0xf0) {
-            case P2_MIDI_NOTE_ON:
-            case P2_MIDI_NOTE_OFF:
-            case P2_MIDI_POLY_AT:
-            case P2_MIDI_CC:
-            case P2_MIDI_PB: {
-                *msg_len = 3;
-                break;
-            }
-            case P2_MIDI_CHAN_PR:
-            case P2_MIDI_PGM: {
-                *msg_len = 2;
-                break;
-            }
-            case P2_MIDI_OTHER: {
-                switch (byte & 0x0f) {
-                case 0x01: // midi time code
-                case 0x03: // song selec
-                    *msg_len = 2;
-                    break;
-                case 0x02 :
-                    *msg_len = 3;
-                    break;
-                case 0x07: // sysex end
-                    // TODO: properly handle sysex length
-                    *msg_len = *msg_pos; // sysex end
-                    break;
-                case 0x00: // sysex start
-                    *msg_len = 0;
-                    break;
-                case 0x08:
-                    *msg_len = 1;
-                    break;
-                default:
-                    *msg_len = 2;
-                    break;
-                }
-                break;
-            }
-            default: {
-                *msg_len = 2;
-                break;
-            }
-            } //case
-        } else {
-            // data byes
-            msg_buf[*msg_pos] = byte;
-            *msg_pos = *msg_pos + 1;
-        }
-
-        if (*msg_pos == *msg_len) {
-            ev = event_data_new(EVENT_MIDI_EVENT);
-            ev->midi_event.id = push2->dev.id;
-            ev->midi_event.data[0] = msg_buf[0];
-            ev->midi_event.data[1] = *msg_len > 1 ? msg_buf[1] : 0;
-            ev->midi_event.data[2] = *msg_len > 2 ? msg_buf[2] : 0;
-            ev->midi_event.nbytes = *msg_len;
-            push2_handle_midi(self, ev);
-            *msg_pos = 0;
-            *msg_len = 0;
-        }
-    } while (read > 0);
-}
-
-void push2_handle_midi(void* self, union event_data* evin) {
-    struct dev_push2 *push2 = (struct dev_push2 *) self;
-
-    if (!push2->cuckoo_) {
-        event_post(evin);
-        return;
+        lua_register(lvm, "s_update", &_push2_screen_update);
     }
 
-    static struct timespec encoderthin[8];
-
-    uint8_t type = evin->midi_event.data[0] & 0xF0;
-    // uint8_t ch = ev->midi_event.data[0] & 0x0F;
-    // determine if midi message is going to be interpretted or just sent on
-    switch (type) {
-    case P2_MIDI_NOTE_ON:
-    case P2_MIDI_NOTE_OFF: {
-        int8_t note = evin->midi_event.data[1];
-        int8_t data = evin->midi_event.data[2];
-        if (note >= P2_NOTE_PAD_START && note <= P2_NOTE_PAD_END) {
-            if (!push2->midi_mode) {
-                // send grid key event
-                int x = ((note - P2_NOTE_PAD_START) % PUSH2_GRID_X  ) + (push2->grid_page * PUSH2_GRID_X);
-                int y = PUSH2_GRID_Y - ((note - P2_NOTE_PAD_START) / PUSH2_GRID_X) - 1;
-                union event_data *ev = event_data_new(EVENT_GRID_KEY);
-                ev->grid_key.id = push2->dev.id;
-                ev->grid_key.x = x;
-                ev->grid_key.y = y;
-                ev->grid_key.state = (type == P2_MIDI_NOTE_ON) && (data > 0);
-                // fprintf(stderr, "key %d\t%d\t%d\t%d\n", ev->grid_key.id, ev->grid_key.x, ev->grid_key.y , ev->grid_key.state);
-                event_post(ev);
-            } else {
-                const int tonic = 0;
-                const int rowOffset = 5;
-                int x = (note - P2_NOTE_PAD_START) % PUSH2_GRID_X;
-                int y =  (note - P2_NOTE_PAD_START) / PUSH2_GRID_X;
-                int noteout =  note = (push2->midi_octave * 12)  + (y * rowOffset) + x + tonic;
-                evin->midi_event.data[1] = noteout;
-                // fprintf(stderr, "midi  0x%02x\t%d\t%d\n", evin->midi_event.data[0], evin->midi_event.data[1], evin->midi_event.data[2]);
-                event_post(evin);
-            }
-            return;
-        }
-        break;
-    }
-    case P2_MIDI_CC: {
-        int8_t cc = evin->midi_event.data[1];
-        int8_t data = evin->midi_event.data[2];
-        if (cc >= P2_DEV_SELECT_CC_START  && cc <= P2_DEV_SELECT_CC_END) {
-            if (cc <= P2_DEV_SELECT_CC_START + 2) {
-                int8_t button = cc - P2_DEV_SELECT_CC_START;
-                // send norns button evt
-                union event_data *ev = event_data_new(EVENT_KEY);
-                ev->enc.n = button + 1;
-                ev->enc.delta = (data > 0);
-                // perr("norns button %d %d\n", ev->enc.n, ev->enc.delta);
-                event_post(ev);
-                return;
-            }
-        } else if (cc >= P2_ENCODER_CC_START  && cc <= P2_ENCODER_CC_END) {
-            if (cc <= P2_ENCODER_CC_START + 2) {
-                // send norns encoder evt
-                int8_t enc = cc - P2_ENCODER_CC_START;
-
-                int v = data > 0x40 ? -1 : 1;
-                // int v = data > 0x40 ? (0x80 - data) * -1 : data;
-                // perr("norns encoder %d %04x %d\n", enc, data, v);
-
-                struct timespec now;
-                clock_gettime(CLOCK_MONOTONIC, &now); // get initial time-stamp
-
-                double diffns = (double)(now.tv_sec - encoderthin[enc].tv_sec) * 1.0e9 +
-                                (double)(now.tv_nsec - encoderthin[enc].tv_nsec);
-
-                if (diffns > 1000000) {
-                    encoderthin[enc] = now;
-                    union event_data *ev = event_data_new(EVENT_ENC);
-                    ev->enc.n = enc + 1;
-                    ev->enc.delta = v;
-                    // perr("norns encoder %d %d\n", ev->enc.n, ev->enc.delta);
-                    event_post(ev);
-                    return;
-                }
-            }
-        } else {
-            switch (cc) {
-            case P2_PAGE_PREV : {
-                if (data && !push2->midi_mode && push2->grid_page > 0)  {
-                    push2->grid_page--;
-                    dev_push2_midi_send_cc(self, P2_PAGE_PREV, (push2->grid_page > 0) ?  0x7f : 0x04);
-                    dev_push2_midi_send_cc(self, P2_PAGE_NEXT, (push2->grid_page < (GRID_X / PUSH2_GRID_X) - 1) ? 0x7f : 0x04);
-                    dev_push2_grid_refresh(self, true);
-                }
-                break;
-            }
-            case P2_PAGE_NEXT : {
-                if (data && !push2->midi_mode && push2->grid_page <  ((GRID_X / PUSH2_GRID_X) - 1))  {
-                    push2->grid_page++;
-                    dev_push2_midi_send_cc(self, P2_PAGE_PREV, (push2->grid_page > 0) ?  0x7f : 0x04);
-                    dev_push2_midi_send_cc(self, P2_PAGE_NEXT, (push2->grid_page < (GRID_X / PUSH2_GRID_X) - 1) ? 0x7f : 0x04);
-                    dev_push2_grid_refresh(self, true);
-                }
-                break;
-            }
-            case P2_OCTAVE_DOWN : {
-                if (data && push2->midi_mode) {
-                    if (push2->midi_octave > 0) {
-                        push2->midi_octave--;
-                        dev_push2_midi_send_cc(self, P2_OCTAVE_DOWN,    (!push2->midi_mode ? 0x00 : (push2->midi_octave > 0 ? 0x7f : 0x04)));
-                        dev_push2_midi_send_cc(self, P2_OCTAVE_UP,      (!push2->midi_mode ? 0x00 : (push2->midi_octave < 7 ? 0x7f : 0x04)));
-                    }
-                }
-                break;
-            }
-            case P2_OCTAVE_UP : {
-                if (data && push2->midi_mode) {
-                    if (push2->midi_octave < 7) {
-                        push2->midi_octave++;
-                        dev_push2_midi_send_cc(self, P2_OCTAVE_DOWN,    (!push2->midi_mode ? 0x00 : (push2->midi_octave > 0 ? 0x7f : 0x04)));
-                        dev_push2_midi_send_cc(self, P2_OCTAVE_UP,      (!push2->midi_mode ? 0x00 : (push2->midi_octave < 7 ? 0x7f : 0x04)));
-                    }
-                }
-                break;
-            }
-            case P2_LAYOUT : {
-                if (data) {
-                    push2->midi_mode = ! push2->midi_mode;
-                    dev_push2_midi_send_cc(self, P2_LAYOUT, push2->midi_mode ? 0x7f : 0x04);
-                    if (push2->midi_mode) {
-                        dev_push2_midi_send_cc(self, P2_PAGE_PREV, 0);
-                        dev_push2_midi_send_cc(self, P2_PAGE_NEXT, 0);
-                        dev_push2_grid_refresh(self, true);
-
-                    } else {
-                        dev_push2_midi_send_cc(self, P2_PAGE_PREV, (push2->grid_page > 0) ?  0x7f : 0x04);
-                        dev_push2_midi_send_cc(self, P2_PAGE_NEXT, (push2->grid_page < (GRID_X / PUSH2_GRID_X) - 1) ? 0x7f : 0x04);
-                        dev_push2_grid_refresh(self, true);
-                    }
-                    dev_push2_midi_send_cc(self, P2_OCTAVE_DOWN,    (!push2->midi_mode ? 0x00 : (push2->midi_octave > 0 ? 0x7f : 0x04)));
-                    dev_push2_midi_send_cc(self, P2_OCTAVE_UP,      (!push2->midi_mode ? 0x00 : (push2->midi_octave < 7 ? 0x7f : 0x04)));
-                }
-                break;
-            }
-            }
-        }
-    }
-    default: {
-        ;
-    }
-
-    }
-}
-
-ssize_t dev_push2_midi_send(void *self, uint8_t *data, size_t n) {
-    struct dev_push2 *push2 = (struct dev_push2 *) self;
-    return snd_rawmidi_write(push2->handle_out, data, n);
-}
-
-
-void dev_push2_midi_send_note(void *self, uint8_t note, uint8_t vel) {
-    uint8_t msg[3] = {P2_MIDI_NOTE_ON, note, vel};
-    dev_push2_midi_send(self, msg, sizeof(msg));
-}
-
-void dev_push2_midi_send_cc(void *self, uint8_t cc, uint8_t v) {
-    uint8_t msg[3] = {P2_MIDI_CC, cc, v};
-    dev_push2_midi_send(self, msg, sizeof(msg));
+    lua_register(lvm, "p2_update", &_push2d_update);
+    lua_register(lvm, "p2_font_face", &_push2d_font_face);
+    lua_register(lvm, "p2_font_size", &_push2d_font_size);
+    lua_register(lvm, "p2_aa", &_push2d_aa);
+    lua_register(lvm, "p2_colour", &_push2d_colour);
+    lua_register(lvm, "p2_line_width", &_push2d_line_width);
+    lua_register(lvm, "p2_move", &_push2d_move);
+    lua_register(lvm, "p2_line", &_push2d_line);
+    lua_register(lvm, "p2_move_rel", &_push2d_move_rel);
+    lua_register(lvm, "p2_line_rel", &_push2d_line_rel);
+    lua_register(lvm, "p2_curve", &_push2d_curve);
+    lua_register(lvm, "p2_curve_rel", &_push2d_curve_rel);
+    lua_register(lvm, "p2_arc", &_push2d_arc);
+    lua_register(lvm, "p2_rect", &_push2d_rect);
+    lua_register(lvm, "p2_stroke", &_push2d_stroke);
+    lua_register(lvm, "p2_fill", &_push2d_fill);
+    lua_register(lvm, "p2_text", &_push2d_text);
+    lua_register(lvm, "p2_clear", &_push2d_clear);
+    lua_register(lvm, "p2_close", &_push2d_close);
+    lua_register(lvm, "p2_extents", &_push2d_extents);
 }

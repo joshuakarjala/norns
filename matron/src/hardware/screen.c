@@ -45,10 +45,10 @@ static FT_Face face[NUM_FONTS];
 static double text_xy[2];
 
 #define SCREEN_FB_FMT   CAIRO_FORMAT_ARGB32
- #define SCREEN_FMT      CAIRO_FORMAT_ARGB32
- #define SCREEN_X 1024
- #define SCREEN_Y 600
- #define SCREEN_SCALE 8
+#define SCREEN_FMT      CAIRO_FORMAT_ARGB32
+#define SCREEN_X 1024
+#define SCREEN_Y 600
+#define SCREEN_SCALE 8
 
 
 #ifndef SCREEN_FB_FMT
