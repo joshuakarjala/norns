@@ -1228,6 +1228,9 @@ int _push2_screen_update(lua_State *l) {
     defaultPush2->cuckoo_ = true;
     dev_push2_midi_send_cc(defaultPush2, P2_USER_CC,  defaultPush2->cuckoo_ ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
     dev_push2_midi_send_cc(defaultPush2, P2_SETUP_CC, defaultPush2->cuckoo_ ? 0 : P2_CLR_W_AVAIL);
+    for(int i=P2_DEV_SELECT_CC_START;i<=P2_DEV_SELECT_CC_END;i++) {
+        dev_push2_midi_send_cc(defaultPush2, i, (i> P2_DEV_SELECT_CC_START + 2) ? 0 : P2_CLR_W_AVAIL);
+    }
 
     screen_update();
     lua_settop(l, 0);
