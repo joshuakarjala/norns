@@ -13,7 +13,10 @@
 
 
 struct dev_push2 {
+    // midi device
     struct dev_common dev;
+    snd_rawmidi_t *handle_in;
+    snd_rawmidi_t *handle_out;
 
     bool cuckoo_;
 	bool running_;
@@ -35,9 +38,6 @@ struct dev_push2 {
     cairo_surface_t *pushDisplSurface_[2];
     cairo_t *pushDispl_[2];
 
-    // midi
-    snd_rawmidi_t *handle_in;
-    snd_rawmidi_t *handle_out;
 
     // grid
     uint8_t* grid_state;
