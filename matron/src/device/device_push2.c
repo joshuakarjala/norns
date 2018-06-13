@@ -272,6 +272,10 @@ int dev_push2_init(void *self) {
     dev_push2_midi_send_cc(self, P2_USER_CC, push2->cuckoo_ ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
     dev_push2_midi_send_cc(self, P2_SETUP_CC, push2->cuckoo_ ? 0 : P2_CLR_W_AVAIL);
 
+    for(int i=P2_DEV_SELECT_CC_START;i<=P2_DEV_SELECT_CC_END;i++) {
+        dev_push2_midi_send_cc(self, i, (i> P2_DEV_SELECT_CC_START + 2) ? 0 : P2_CLR_W_AVAIL);
+    }
+
     dev_push2_grid_state_all(push2, 0);
     dev_push2_grid_refresh(self, true);
 
@@ -565,6 +569,10 @@ void push2_handle_midi(void* self, union event_data* evin) {
             push2->cuckoo_ = ! push2->cuckoo_;
             dev_push2_midi_send_cc(self, P2_USER_CC,  push2->cuckoo_ ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
             dev_push2_midi_send_cc(self, P2_SETUP_CC, push2->cuckoo_ ? 0 : P2_CLR_W_AVAIL);
+            for(int i=P2_DEV_SELECT_CC_START;i<=P2_DEV_SELECT_CC_END;i++) {
+                dev_push2_midi_send_cc(self, i, (i> P2_DEV_SELECT_CC_START + 2 || !push2->cuckoo_) 
+                                        ? 0 : P2_CLR_W_AVAIL);
+            }
             return;
         }
         if (cc == P2_SETUP_CC) {
