@@ -174,6 +174,10 @@ int dev_push2_init(void *self) {
         return -1;
     }
 
+    for(int i=0;i<128;i++) {
+        push2->midi_note_state[i] = 0;
+        push2->midi_cc_state[i] = 0;
+    }
 
     push2->cuckoo_ = true;
 
@@ -334,8 +338,38 @@ void* dev_push2_start(void *self) {
     while (push2->running_) {
         dev_push2_midi_read(self, msg_buf, &msg_pos, &msg_len);
         if ((count % 32) == 0) render(self); //~30fps
+
+        if ((count % 16) == 0) {  // how often to refresh leds
+            unsigned sendcount = 64; // how many in one go
+
+            uint8_t msg[3] = {P2_MIDI_NOTE_ON, 0, 0};
+            msg[0] = P2_MIDI_NOTE_ON;
+            for(int i=0;i<128 && sendcount > 0 ;i++ ) {
+                unsigned v = push2->midi_note_state[i];
+                if(v < 128 ) {
+                    push2->midi_note_state[i] = v | 0b10000000;
+                    msg[1] = i;
+                    msg[2] = v;
+                    dev_push2_midi_send(self, msg, sizeof(msg));
+                    sendcount--;
+                }
+            }
+
+            msg[0] = P2_MIDI_CC;
+            for(int i=0;i<128 && sendcount > 0 ;i++ ) {
+                unsigned v = push2->midi_cc_state[i];
+                if(v < 128 ) {
+                    push2->midi_cc_state[i] = v | 0b10000000;
+                    msg[1] = i;
+                    msg[2] = v;
+                    dev_push2_midi_send(self, msg, sizeof(msg));
+                    sendcount--;
+                }
+            }
+        } // midi send
         usleep(1000); // 1ms
         count++;
+
     }
     push2->running_ = true;
     perr("Push 2 render loop stopped\n");
@@ -429,12 +463,10 @@ void dev_push2_grid_state_all(void* self, uint8_t z) {
             GRID_STATE(push2->grid_state, x, y) = z;
         }
     }
-    dev_push2_grid_refresh(self, false);
 }
 
 void dev_push2_grid_refresh(void* self, bool force) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
-    uint8_t msg[3] = {P2_MIDI_NOTE_ON, P2_NOTE_PAD_START, 0};
 
 
     if (!push2->midi_mode) { // grid emulation
@@ -447,9 +479,9 @@ void dev_push2_grid_refresh(void* self, bool force) {
                 uint8_t z1 =  GRID_STATE(push2->grid_state_buf, x, y) ;
                 if (z != z1 || force) {
                     GRID_STATE(push2->grid_state_buf, x, y) = z;
-                    msg[1] = P2_NOTE_PAD_START + ((PUSH2_GRID_Y - y - 1) * PUSH2_GRID_X) + ( x - offset );
-                    msg[2] = (z > 0 ? ( z == 15 ? 122 : 9 + z) : 0);
-                    dev_push2_midi_send(push2, msg, 3);
+                    unsigned note = P2_NOTE_PAD_START + ((PUSH2_GRID_Y - y - 1) * PUSH2_GRID_X) + ( x - offset );
+                    unsigned vel = (z > 0 ? ( z == 15 ? 122 : 9 + z) : 0);
+                    dev_push2_midi_send_note(self,note,vel);
                 }
             }
         }
@@ -464,9 +496,9 @@ void dev_push2_grid_refresh(void* self, bool force) {
                     int i = note_s %  12;
                     int v = (scale & (1 << ( 11 - i)));
                     clr = (i == 0 ? PAD_NOTE_ROOT_CLR : (v > 0 ? PAD_NOTE_IN_KEY_CLR : PAD_NOTE_OFF_CLR));
-                    msg[1] = P2_NOTE_PAD_START + (y * PUSH2_GRID_X)  + x;
-                    msg[2] = clr;
-                    dev_push2_midi_send(push2, msg, 3);
+                    unsigned note = P2_NOTE_PAD_START + (y * PUSH2_GRID_X)  + x;
+                    unsigned vel = clr;
+                    dev_push2_midi_send_note(self,note,vel);
                 }
             }
         }
@@ -742,13 +774,16 @@ ssize_t dev_push2_midi_send(void *self, uint8_t *data, size_t n) {
 
 
 void dev_push2_midi_send_note(void *self, uint8_t note, uint8_t vel) {
-    uint8_t msg[3] = {P2_MIDI_NOTE_ON, note, vel};
-    dev_push2_midi_send(self, msg, sizeof(msg));
+    struct dev_push2 *push2 = (struct dev_push2 *) self;
+    if(vel == ( push2->midi_note_state[note] & 0b10000000 )) return;
+    push2->midi_note_state[note] = vel;
+
 }
 
 void dev_push2_midi_send_cc(void *self, uint8_t cc, uint8_t v) {
-    uint8_t msg[3] = {P2_MIDI_CC, cc, v};
-    dev_push2_midi_send(self, msg, sizeof(msg));
+    struct dev_push2 *push2 = (struct dev_push2 *) self;
+    if(v == ( push2->midi_cc_state[cc] & 0b10000000 )) return;
+    push2->midi_cc_state[cc] = v;
 }
 
 //=========================================================================================
