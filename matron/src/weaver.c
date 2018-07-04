@@ -1610,6 +1610,15 @@ void w_handle_push2_remove(int id) {
   l_report(lvm, l_docall(lvm, 1, 0));
 }
 
+void w_handle_push2_event(void *p, uint8_t op) {
+  // currently, only used internally to handle mode switch, 
+  // in a threadsafe manner, later could allow mode switching from lua
+  struct dev_push2  *dev = (struct dev_push2 *)p;
+  dev_push2_event(dev,op);
+}
+
+
+
 void w_handle_osc_event(char *from_host,
                         char *from_port,
                         char *path,
