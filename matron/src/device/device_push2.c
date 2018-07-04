@@ -974,7 +974,7 @@ int _push2d_font_size(lua_State *l) {
 
     luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
     struct dev_push2 *dev = lua_touserdata(l, 1);
-    int z = (int) luaL_checkinteger(l, 2);
+    int z = (int) luaL_checknumber(l, 2);
     cairo_set_font_size(dev->pushDispl_[1], z);
     lua_settop(l, 0);
     return 0;
@@ -1027,16 +1027,73 @@ int _push2d_line_width(lua_State *l) {
     return 0;
 }
 
+
+int _push2d_line_cap(lua_State *l) {
+    if (lua_gettop(l) != 2) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    struct dev_push2 *dev = lua_touserdata(l, 1);
+    const char *style = luaL_checkstring(l, 2);
+
+    if(strcmp(style, "round") == 0){
+      cairo_set_line_cap(dev->pushDispl_[1],CAIRO_LINE_CAP_ROUND);
+    }else if(strcmp(style, "square") == 0){
+      cairo_set_line_cap(dev->pushDispl_[1],CAIRO_LINE_CAP_SQUARE);
+    }else{
+      cairo_set_line_cap(dev->pushDispl_[1],CAIRO_LINE_CAP_BUTT);
+    }
+
+    lua_settop(l, 0);
+    return 0;
+}
+
+int _push2d_line_join(lua_State *l) {
+    if (lua_gettop(l) != 2) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    struct dev_push2 *dev = lua_touserdata(l, 1);
+    const char *style = luaL_checkstring(l, 2);
+
+    if(strcmp(style, "round") == 0){
+      cairo_set_line_join(dev->pushDispl_[1],CAIRO_LINE_JOIN_ROUND);
+    }else if(strcmp(style, "bevel") == 0){
+      cairo_set_line_join(dev->pushDispl_[1],CAIRO_LINE_JOIN_BEVEL);
+    }else{
+      cairo_set_line_join(dev->pushDispl_[1],CAIRO_LINE_JOIN_MITER);
+    }
+
+    lua_settop(l, 0);
+    return 0;
+}
+
+int _push2d_miter_limit(lua_State *l) {
+    if (lua_gettop(l) != 2) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+
+    struct dev_push2 *dev = lua_touserdata(l, 1);
+    double limit = luaL_checknumber(l, 2);
+    cairo_set_miter_limit(dev->pushDispl_[1],limit);
+
+    lua_settop(l, 0);
+    return 0;
+}
+
 int _push2d_move(lua_State *l) {
     if (lua_gettop(l) != 3) {
         return luaL_error(l, "wrong number of arguments");
     }
+
     luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
     struct dev_push2 *dev = lua_touserdata(l, 1);
 
     double x = luaL_checknumber(l, 2);
     double y = luaL_checknumber(l, 3);
-    cairo_move_to(dev->pushDispl_[1], x + 0.5, y + 0.5);
+    cairo_move_to(dev->pushDispl_[1], x, y);
     lua_settop(l, 0);
     return 0;
 }
@@ -1048,9 +1105,9 @@ int _push2d_line(lua_State *l) {
 
     luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
     struct dev_push2 *dev = lua_touserdata(l, 1);
-    double x = luaL_checkinteger(l, 2);
-    double y = luaL_checkinteger(l, 3);
-    cairo_line_to(dev->pushDispl_[1], x + 0.5, y + 0.5);
+    double x = luaL_checknumber(l, 2);
+    double y = luaL_checknumber(l, 3);
+    cairo_line_to(dev->pushDispl_[1], x, y);
     lua_settop(l, 0);
     return 0;
 }
@@ -1064,7 +1121,7 @@ int _push2d_move_rel(lua_State *l) {
     struct dev_push2 *dev = lua_touserdata(l, 1);
     double x = luaL_checknumber(l, 2);
     double y = luaL_checknumber(l, 3);
-    cairo_rel_move_to(dev->pushDispl_[1], x + 0.5, y + 0.5);
+    cairo_rel_move_to(dev->pushDispl_[1], x, y);
     lua_settop(l, 0);
     return 0;
 }
@@ -1078,7 +1135,7 @@ int _push2d_line_rel(lua_State *l) {
     struct dev_push2 *dev = lua_touserdata(l, 1);
     double x = (int) luaL_checknumber(l, 2);
     double y = (int) luaL_checknumber(l, 3);
-    cairo_rel_line_to(dev->pushDispl_[1], x + 0.5, y + 0.5);
+    cairo_rel_line_to(dev->pushDispl_[1], x, y);
     lua_settop(l, 0);
     return 0;
 }
@@ -1131,7 +1188,7 @@ int _push2d_arc(lua_State *l) {
     double r = luaL_checknumber(l, 4);
     double a1 = luaL_checknumber(l, 5);
     double a2 = luaL_checknumber(l, 6);
-    cairo_arc(dev->pushDispl_[1], x + 0.5, y + 0.5, r, a1, a2);
+    cairo_arc(dev->pushDispl_[1], x,  y, r, a1, a2);
     lua_settop(l, 0);
     return 0;
 }
@@ -1147,7 +1204,7 @@ int _push2d_rect(lua_State *l) {
     double y = luaL_checknumber(l, 3);
     double w = luaL_checknumber(l, 4);
     double h = luaL_checknumber(l, 5);
-    cairo_rectangle(dev->pushDispl_[1], x + 0.5, y + 0.5, w, h);
+    cairo_rectangle(dev->pushDispl_[1], x, y, w, h);
     lua_settop(l, 0);
     return 0;
 }
@@ -1293,6 +1350,9 @@ void push2_register_lua(void *self) {
     lua_register(lvm, "p2_font_face", &_push2d_font_face);
     lua_register(lvm, "p2_font_size", &_push2d_font_size);
     lua_register(lvm, "p2_aa", &_push2d_aa);
+    lua_register(lvm, "p2_line_cap", &_push2d_line_cap);
+    lua_register(lvm, "p2_line_join", &_push2d_line_join);
+    lua_register(lvm, "p2_miter_limit", &_push2d_miter_limit);
     lua_register(lvm, "p2_colour", &_push2d_colour);
     lua_register(lvm, "p2_line_width", &_push2d_line_width);
     lua_register(lvm, "p2_move", &_push2d_move);
