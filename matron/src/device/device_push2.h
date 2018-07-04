@@ -52,3 +52,5 @@ struct dev_push2 {
 extern int dev_push2_init(void *self);
 extern void dev_push2_deinit(void *self);
 extern void* dev_push2_start(void *self);
+
+extern void dev_push2_event(void* self, uint8_t op);

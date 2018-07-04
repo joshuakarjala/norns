@@ -261,6 +261,12 @@ static void handle_event(union event_data *ev) {
     case EVENT_PUSH2_REMOVE:
         w_handle_push2_remove(ev->push2_remove.id);
         break;
+    case EVENT_PUSH2_EVENT:
+        w_handle_push2_event(ev->push2_event.dev,ev->push2_event.op);
+        break;
+    case EVENT_RESET_LVM:
+        w_reset_lvm();
+    	break;
     case EVENT_QUIT:
         quit = true;
         break;

@@ -30,6 +30,9 @@ ssize_t dev_push2_midi_send(void *self, uint8_t *data, size_t n);
 void dev_push2_midi_send_note(void *self, uint8_t note, uint8_t vel);
 void dev_push2_midi_send_cc(void *self, uint8_t cc, uint8_t v);
 
+
+dev_push2_event_send(void* self, uint8_t op);
+
 void push2_handle_midi(void* self, union event_data* ev);
 void push2_register_lua(void* self);
 
@@ -106,16 +109,15 @@ void push2d_init();
 #define P2_CLR_W_ON 0x7f
 
 
+#define P2_OP_GRID_REFRESH 0
+
+
 static const uint16_t VID = 0x2982, PID = 0x1967;
 
 #define HDR_PKT_SZ 0x10
 static uint8_t headerPkt[HDR_PKT_SZ] = { 0xFF, 0xCC, 0xAA, 0x88, 0x00, 0x00, 0x00, 0x00,
                                          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
                                        };
-
-
-// TODO...
-// push 2 native mode
 
 
 // Future versions of libusb will use usb_interface instead of interface
@@ -148,6 +150,8 @@ static int perr(char const *format, ...) {
 #define CALL_CHECK(fcall) do { r=fcall; if (r < 0) ERR_EXIT(r); } while (0);
 
 struct dev_push2 *defaultPush2 = NULL;
+
+//// START OF PUBLIC INTERFACE
 
 int dev_push2_init(void *self) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
@@ -377,7 +381,24 @@ void* dev_push2_start(void *self) {
 }
 
 
-int render(void *self ) {
+
+void dev_push2_event(void* self, uint8_t op) {
+    struct dev_push2 *push2 = (struct dev_push2 *) self;
+    switch(op) {
+        case P2_OP_GRID_REFRESH : {
+            push2_grid_refresh(self,true);
+            break;
+        }
+        default:
+        break;
+    }
+
+}
+
+//// END OF PUBLIC INTERFACE
+
+
+nt render(void *self ) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
 
     if (push2->handle_ == NULL) return -1;
@@ -449,6 +470,16 @@ int deinit(void *self) {
     libusb_exit(NULL);
     return 0;
 }
+
+dev_push2_event_send(void* self, uint8_t op) {
+    struct dev_push2 *push2 = (struct dev_push2 *) self;
+    union event_data *ev = event_data_new(EVENT_PUSH2_EVENT);
+    ev->push2_event.dev = self;
+    ev->push2_event.op = op;
+    event_post(ev);
+}
+
+
 
 void dev_push2_grid_state(void* self, uint8_t x, uint8_t y, uint8_t z) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
@@ -705,7 +736,7 @@ void push2_handle_midi(void* self, union event_data* evin) {
                     push2->grid_page--;
                     dev_push2_midi_send_cc(self, P2_CURSOR_LEFT_CC, (push2->grid_page > 0) ?  P2_CLR_W_ON : P2_CLR_W_AVAIL);
                     dev_push2_midi_send_cc(self, P2_CURSOR_RIGHT_CC, (push2->grid_page < (GRID_X / PUSH2_GRID_X) - 1) ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
-                    dev_push2_grid_refresh(self, true);
+                    dev_push2_event_send(self,P2_OP_GRID_REFRESH);
                 }
                 break;
             }
@@ -714,7 +745,7 @@ void push2_handle_midi(void* self, union event_data* evin) {
                     push2->grid_page++;
                     dev_push2_midi_send_cc(self, P2_CURSOR_LEFT_CC, (push2->grid_page > 0) ?  P2_CLR_W_ON : P2_CLR_W_AVAIL);
                     dev_push2_midi_send_cc(self, P2_CURSOR_RIGHT_CC, (push2->grid_page < (GRID_X / PUSH2_GRID_X) - 1) ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
-                    dev_push2_grid_refresh(self, true);
+                    dev_push2_event_send(self,P2_OP_GRID_REFRESH);
                 }
                 break;
             }
@@ -745,13 +776,11 @@ void push2_handle_midi(void* self, union event_data* evin) {
                     if (push2->midi_mode) {
                         dev_push2_midi_send_cc(self, P2_CURSOR_LEFT_CC, 0);
                         dev_push2_midi_send_cc(self, P2_CURSOR_RIGHT_CC, 0);
-                        dev_push2_grid_refresh(self, true);
-
                     } else {
                         dev_push2_midi_send_cc(self, P2_CURSOR_LEFT_CC, (push2->grid_page > 0) ?  P2_CLR_W_ON : P2_CLR_W_AVAIL);
                         dev_push2_midi_send_cc(self, P2_CURSOR_RIGHT_CC, (push2->grid_page < (GRID_X / PUSH2_GRID_X) - 1) ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
-                        dev_push2_grid_refresh(self, true);
                     }
+                    dev_push2_event_send(self,P2_OP_GRID_REFRESH);
                     dev_push2_midi_send_cc(self, P2_OCTAVE_DOWN_CC,    (!push2->midi_mode ? 0x00 : (push2->midi_octave > 0 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
                     dev_push2_midi_send_cc(self, P2_OCTAVE_UP_CC,      (!push2->midi_mode ? 0x00 : (push2->midi_octave < 7 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
                 }
