@@ -366,26 +366,31 @@ void* dev_push2_start(void *self) {
     int count = 0;
     while (push2->running_) {
         dev_push2_midi_read(self, msg_buf, &msg_pos, &msg_len);
-        if ((count % 32) == 0) render(self); //~30fps
 
-        if ((count % 16) == 0) {  // how often to refresh leds
+        if ((count % 32) == 0) render(self); //~30fps
+	else if ((count % 16) == 0) {  // how often to refresh leds
             unsigned sendcount = 64; // how many in one go
 
             uint8_t msg[3] = {P2_MIDI_NOTE_ON, 0, 0};
+	    uint8_t n = sizeof(msg);
             msg[0] = P2_MIDI_NOTE_ON;
             for(int i=0;i<128 && sendcount > 0 ;i++ ) {
 
                 // pthread_mutex_lock(&push2_midilock);
                 unsigned v = push2->midi_note_state[i];
-                if(v < 128) push2->midi_note_state[i] = v | 0b10000000;
-                // pthread_mutex_unlock(&push2_midilock);
 
                 if(v < 128 ) {
                     msg[1] = i;
                     msg[2] = v;
-                    dev_push2_midi_send(self, msg, sizeof(msg));
-                    sendcount--;
+                    if(dev_push2_midi_send(self, msg,n)==n ) {
+			    push2->midi_note_state[i] = v | 0b10000000;
+			    sendcount--;
+		    }
+		    else {
+			    sendcount=0;
+		    }
                 }
+                // pthread_mutex_unlock(&push2_midilock);
             }
 
             msg[0] = P2_MIDI_CC;
@@ -393,15 +398,19 @@ void* dev_push2_start(void *self) {
 
                 // pthread_mutex_lock(&push2_midilock);
                 unsigned v = push2->midi_cc_state[i];
-                if(v < 128) push2->midi_cc_state[i] = v | 0b10000000;
-                // pthread_mutex_unlock(&push2_midilock);
 
                 if(v < 128 ) {
                     msg[1] = i;
                     msg[2] = v;
-                    dev_push2_midi_send(self, msg, sizeof(msg));
-                    sendcount--;
+                    if(dev_push2_midi_send(self, msg,n)==n ) {
+			    push2->midi_cc_state[i] = v | 0b10000000;
+			    sendcount--;
+		    }
+		    else {
+			    sendcount=0;
+		    }
                 }
+                // pthread_mutex_unlock(&push2_midilock);
             }
         } // midi send
         usleep(1000); // 1ms
@@ -855,7 +864,12 @@ void dev_push2_layout(void *self) {
 
 ssize_t dev_push2_midi_send(void *self, uint8_t *data, size_t n) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
-    return snd_rawmidi_write(push2->handle_out, data, n);
+    if(snd_rawmidi_write(push2->handle_out, data, n) == (int) n) {
+	    if(snd_rawmidi_drain(push2->handle_out) >=0) {
+		    return n;
+	    }
+    }
+    return -1;
 }
 
 
