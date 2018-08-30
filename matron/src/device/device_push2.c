@@ -654,7 +654,7 @@ void dev_push2_midi_read(void *self, uint8_t* msg_buf, uint8_t* msg_pos, uint8_t
 
         if (*msg_pos == *msg_len) {
             ev = event_data_new(EVENT_MIDI_EVENT);
-            ev->midi_event.id = push2->dev.id;
+            ev->midi_event.id = push2->dev.id + PUSH2_DEV_OFFSET;
             ev->midi_event.data[0] = msg_buf[0];
             ev->midi_event.data[1] = *msg_len > 1 ? msg_buf[1] : 0;
             ev->midi_event.data[2] = *msg_len > 2 ? msg_buf[2] : 0;
@@ -716,7 +716,7 @@ void push2_handle_midi(void* self, union event_data* evin) {
                 int x = ((note - P2_NOTE_PAD_START) % PUSH2_GRID_X  ) + (push2->grid_page * PUSH2_GRID_X);
                 int y = PUSH2_GRID_Y - ((note - P2_NOTE_PAD_START) / PUSH2_GRID_X) - 1;
                 union event_data *ev = event_data_new(EVENT_GRID_KEY);
-                ev->grid_key.id = push2->dev.id;
+                ev->grid_key.id = push2->dev.id + PUSH2_DEV_OFFSET;
                 ev->grid_key.x = x;
                 ev->grid_key.y = y;
                 ev->grid_key.state = (type == P2_MIDI_NOTE_ON) && (data > 0);

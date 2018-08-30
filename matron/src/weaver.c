@@ -1358,26 +1358,21 @@ void w_handle_push2_add(void *p) {
   l_report(lvm, l_docall(lvm, 3, 0));
 
   // its also a midi controller 
-  // FIXME : id is wrong
   _push_norns_func("midi", "add");
-  lua_pushinteger(lvm, id + 1); // convert to 1-base
+  lua_pushinteger(lvm, id + 1 + PUSH2_DEV_OFFSET); // convert to 1-base
   lua_pushstring(lvm, base->name);
   lua_pushlightuserdata(lvm, dev);
   l_report(lvm, l_docall(lvm, 3, 0));
 
   // and it might be a grid
-  // FIXME : we can really share monome if a monome grid already exists
-  if(dev->cuckoo_) {
-    const char *serial = "Push2";
-    const char *name =  "Push2";
-    _push_norns_func("monome", "add");
-    lua_pushinteger(lvm, id + 1); // convert to 1-base
-    lua_pushstring(lvm, serial);
-    lua_pushstring(lvm, name);
-    lua_pushlightuserdata(lvm, dev);
-    l_report(lvm, l_docall(lvm, 4, 0));
-  }
-
+  const char *serial = "Push2";
+  const char *name =  "Push2";
+  _push_norns_func("monome", "add");
+  lua_pushinteger(lvm, id + 1 + PUSH2_DEV_OFFSET); // convert to 1-base
+  lua_pushstring(lvm, serial);
+  lua_pushstring(lvm, name);
+  lua_pushlightuserdata(lvm, dev);
+  l_report(lvm, l_docall(lvm, 4, 0));
 }
 
 void w_handle_push2_remove(int id) {
@@ -1387,13 +1382,12 @@ void w_handle_push2_remove(int id) {
 
 
   _push_norns_func("midi", "remove");
-  lua_pushinteger(lvm, id + 1); // convert to 1-base
+  lua_pushinteger(lvm, id + 1 + PUSH2_DEV_OFFSET); // convert to 1-base
   l_report(lvm, l_docall(lvm, 1, 0));
 
 
-   //FIXME, this only be in case of cuckoo mode
   _push_norns_func("monome", "remove");
-  lua_pushinteger(lvm, id + 1); // convert to 1-base
+  lua_pushinteger(lvm, id + 1 + PUSH2_DEV_OFFSET); // convert to 1-base
   l_report(lvm, l_docall(lvm, 1, 0));
 }
 

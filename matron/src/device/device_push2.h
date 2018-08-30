@@ -11,6 +11,8 @@
 #define PUSH2_WIDTH   960
 #define PUSH2_DATA_PKT_SZ (PUSH2_LINE * PUSH2_WIDTH)
 
+#define PUSH2_DEV_OFFSET 10
+
 
 struct dev_push2 {
     // midi device
