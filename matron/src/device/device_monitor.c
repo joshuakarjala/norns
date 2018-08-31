@@ -156,9 +156,7 @@ int dev_monitor_scan(void) {
             dev = udev_device_new_from_syspath(udev, path);
 
             if (dev != NULL) {
-                if (udev_device_get_parent_with_subsystem_devtype(dev, "usb", NULL)) {
-                    handle_device(dev);
-                }
+                handle_device(dev);
                 udev_device_unref(dev);
             }
         }
@@ -297,14 +295,18 @@ const char* get_alsa_midi_node(struct udev_device *dev) {
 // try to get product name from udev_device or its parents
 const char* get_device_name(struct udev_device *dev) {
     char *current_name = NULL;
+    char *current_id = NULL;
     struct udev_device *current_dev = dev;
 
     while (current_name == NULL) {
         current_name = (char *) udev_device_get_sysattr_value(current_dev, "product");
+        if(!current_id) current_id = (char *) udev_device_get_sysattr_value(current_dev, "id");
         current_dev = udev_device_get_parent(current_dev);
 
         if (current_dev == NULL) {
-            break;
+	    // fallback to id if no product name found
+            if(current_id) return strdup(current_id);
+	    return NULL;
         }
     }
 
