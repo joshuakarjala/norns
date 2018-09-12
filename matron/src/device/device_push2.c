@@ -727,10 +727,20 @@ void push2_handle_midi(void* self, union event_data* evin) {
                 const int rowOffset = 5;
                 int x = (note - P2_NOTE_PAD_START) % PUSH2_GRID_X;
                 int y =  (note - P2_NOTE_PAD_START) / PUSH2_GRID_X;
-                int noteout =  note = (push2->midi_octave * 12)  + (y * rowOffset) + x + tonic;
+                int noteout = (push2->midi_octave * 12)  + (y * rowOffset) + x + tonic;
                 evin->midi_event.data[1] = noteout;
                 // fprintf(stderr, "midi  0x%02x\t%d\t%d\n", evin->midi_event.data[0], evin->midi_event.data[1], evin->midi_event.data[2]);
                 event_post(evin);
+
+	        uint8_t clr = PAD_NOTE_ON_CLR;
+		if(type == P2_MIDI_NOTE_OFF || data == 0) {
+                    const int scale = 0b101011010101;
+                    int note_s = (y * rowOffset) + x;
+                    int i = note_s %  12;
+                    int v = (scale & (1 << ( 11 - i)));
+	            clr = (i == 0 ? PAD_NOTE_ROOT_CLR : (v > 0 ? PAD_NOTE_IN_KEY_CLR : PAD_NOTE_OFF_CLR));
+		}
+	        dev_push2_midi_send_note(self,note,clr);
             }
             return;
         }
