@@ -18,16 +18,34 @@
 #define PUSH2_DEV_OFFSET 10
 
 
-struct dev_push2 {
-    // midi device
-    struct dev_common dev;
-    snd_rawmidi_t *handle_in;
-    snd_rawmidi_t *handle_out;
+/// note: display mode, covers both screen and screen navigation
+typedef enum {
+    P2DM_NORNS,
+    P2DM_NATIVE
+} push2_display_mode_t;
 
-    bool cuckoo_;
-	bool running_;
+
+
+// grid events or midi notes from pads
+typedef enum  {
+    P2PM_GRID,
+    P2PM_NOTE
+} push2_pad_mode_t;
+
+
+
+struct dev_push2 {
+
+    // midi device
+    struct dev_common dev_;
+    snd_rawmidi_t *handle_in_;
+    snd_rawmidi_t *handle_out_;
+
+    bool running_;
 
     // screen
+    push2_display_mode_t display_mode_;
+
     libusb_device_handle *handle_;
     int iface_;
     int endpointOut_;
@@ -36,23 +54,24 @@ struct dev_push2 {
     unsigned char *dataPkt_;
 
     unsigned char *screenBuf_[2];
-	cairo_surface_t *screenSurface_[2];
-	cairo_t *screen_[2];
-
+    cairo_surface_t *screenSurface_[2];
+    cairo_t *screen_[2];
 
     unsigned char *pushBuf_[2];
     cairo_surface_t *pushDisplSurface_[2];
     cairo_t *pushDispl_[2];
 
+    push2_pad_mode_t  pad_mode_;
 
     // grid
-    uint8_t* grid_state;
-    uint8_t* grid_state_buf;
-    uint8_t  grid_page;
-    bool     midi_mode;
-    uint8_t  midi_octave;
-    uint8_t  midi_note_state[128];
-    uint8_t  midi_cc_state[128];
+    uint8_t* grid_state_;
+    uint8_t* grid_state_buf_;
+    uint8_t  grid_page_;
+
+    // midi
+    uint8_t  midi_octave_;
+    uint8_t  midi_note_state_[128];
+    uint8_t  midi_cc_state_[128];
 };
 
 extern int dev_push2_init(void *self);
