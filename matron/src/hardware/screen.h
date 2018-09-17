@@ -5,6 +5,7 @@
 extern void screen_init(void);
 extern void screen_deinit(void);
 
+extern void screen_context(void** cr, void **crfb);
 extern void screen_cr(void *cr,void *crfb);
 
 extern void screen_update(void);

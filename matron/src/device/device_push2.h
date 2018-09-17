@@ -6,6 +6,10 @@
 
 #include "device_common.h"
 
+
+#include <lua.h>
+
+
 #define PUSH2_LINE    2048
 #define PUSH2_HEIGHT  160
 #define PUSH2_WIDTH   960
@@ -56,3 +60,10 @@ extern void dev_push2_deinit(void *self);
 extern void* dev_push2_start(void *self);
 
 extern void dev_push2_event(void* self, uint8_t op);
+
+// grid api
+extern int push2_grid_set_led(lua_State *l);
+extern int push2_grid_all_led(lua_State *l);
+extern int push2_grid_refresh(lua_State *l);
+extern int push2_grid_rows(lua_State *l);
+extern int push2_grid_cols(lua_State *l);

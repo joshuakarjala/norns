@@ -18,8 +18,8 @@
 #include "../hardware/screen.h"
 
 // lua
-#include <lua.h>
-#include <lualib.h>
+// #include <lua.h>
+// #include <lualib.h>
 #include <lauxlib.h>
 
 // fwd decls
@@ -131,6 +131,10 @@ static uint8_t headerPkt[HDR_PKT_SZ] = { 0xFF, 0xCC, 0xAA, 0x88, 0x00, 0x00, 0x0
                                          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
                                        };
 
+// default screen context (e.g. norn hardware)
+void* defaultScreen = NULL;
+void* defaultScreenFB = NULL;
+
 
 // Future versions of libusb will use usb_interface instead of interface
 // in libusb_config_descriptor => cater for that
@@ -239,7 +243,16 @@ int dev_push2_init(void *self) {
     push2->screen_[1] = cairo_create (push2->screenSurface_[1]);
     cairo_scale(push2->screen_[1], 2.0f, 2.0f);
 
+    if(defaultScreen == NULL) {
+        // assumes screen has been initialised before push
+        // only do once, since push will overwrite
+        // idea: potentially this allows us to reset it back to norns display
+        screen_context(&defaultScreen, &defaultScreenFB);
+    }
+
+
     if (push2->cuckoo_) {
+        // hijack default norns screen
         screen_cr((void*) push2->screen_[1], (void*) push2->screen_[0]);
     }
     cairo_set_operator(push2->screen_[0], CAIRO_OPERATOR_SOURCE);
@@ -921,13 +934,11 @@ int push2_grid_set_led(lua_State *l) {
     }
 
     luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
-    // struct dev_push2 *md = lua_touserdata(l, 1);
+    struct dev_push2 *push2 = lua_touserdata(l, 1);
     int x = (int) luaL_checkinteger(l, 2) - 1; // convert from 1-base
     int y = (int) luaL_checkinteger(l, 3) - 1; // convert from 1-base
     int z = (int) luaL_checkinteger(l, 4); // don't convert value!
-    // dev_monome_set_led(md, x, y, z);
-    //perr("push2_grid_set_led %d,%d,%d", x, y, z);
-    dev_push2_grid_state(defaultPush2, x, y, z);
+    dev_push2_grid_state(push2, x, y, z);
     lua_settop(l, 0);
     return 0;
 }
@@ -944,11 +955,10 @@ int push2_grid_all_led(lua_State *l) {
     }
 
     luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
-    // struct dev_push2 *md = lua_touserdata(l, 1);
+    struct dev_push2 *push2 = lua_touserdata(l, 1);
     int z = (int) luaL_checkinteger(l, 2); // don't convert value!
-    // dev_monome_all_led(md, z);
     //perr("push2_grid_all_led %d", z);
-    dev_push2_grid_state_all(defaultPush2, z);
+    dev_push2_grid_state_all(push2, z);
     lua_settop(l, 0);
     return 0;
 }
@@ -964,9 +974,9 @@ int push2_grid_refresh(lua_State *l) {
     }
 
     luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
-    // struct dev_push2 *md = lua_touserdata(l, 1);
+    struct dev_push2 *push2 = lua_touserdata(l, 1);
     //perr("push2_grid_refresh");
-    dev_push2_grid_refresh(defaultPush2, false);
+    dev_push2_grid_refresh(push2, false);
     lua_settop(l, 0);
     return 0;
 }
@@ -1452,13 +1462,6 @@ void push2_register_lua(void *self) {
 
     lua_State* lvm = (lua_State*) luaState();
     if (push2->cuckoo_) {
-        lua_register(lvm, "grid_set_led", &push2_grid_set_led);
-        lua_register(lvm, "grid_all_led", &push2_grid_all_led);
-        lua_register(lvm, "grid_refresh", &push2_grid_refresh);
-        lua_register(lvm, "grid_rows", &push2_grid_rows);
-        lua_register(lvm, "grid_cols", &push2_grid_cols);
-
-
         lua_register(lvm, "s_update", &_push2_screen_update);
     }
 

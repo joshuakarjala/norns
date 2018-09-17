@@ -190,6 +190,10 @@ void screen_deinit(void) {
     cairo_surface_destroy(surfacefb);
 }
 
+void screen_context(void** pcr, void **pcrfb) {
+    *pcr = cr;
+    *pcrfb = crfb;
+}
 
 
 void screen_cr(void *newcr,void *newcrfb) {

@@ -977,13 +977,22 @@ int _grid_set_led(lua_State *l) {
   }
 
   luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
-  struct dev_monome *md = lua_touserdata(l, 1);
-  int x = (int) luaL_checkinteger(l, 2) - 1; // convert from 1-base
-  int y = (int) luaL_checkinteger(l, 3) - 1; // convert from 1-base
-  int z = (int) luaL_checkinteger(l, 4); // don't convert value!
-  dev_monome_set_led(md, x, y, z);
-  lua_settop(l, 0);
-  return 0;
+  struct dev_common *dev = lua_touserdata(l, 1);
+  switch (dev->type) {
+    case DEV_TYPE_PUSH2: {
+      return push2_grid_set_led(l);
+    } 
+    case DEV_TYPE_MONOME:
+    default: {
+      struct dev_monome *md = (struct dev_monome*) dev;
+      int x = (int) luaL_checkinteger(l, 2) - 1; // convert from 1-base
+      int y = (int) luaL_checkinteger(l, 3) - 1; // convert from 1-base
+      int z = (int) luaL_checkinteger(l, 4); // don't convert value!
+      dev_monome_set_led(md, x, y, z);
+      lua_settop(l, 0);
+      return 0;
+    }
+  }
 }
 
 /***
@@ -998,11 +1007,20 @@ int _grid_all_led(lua_State *l) {
   }
 
   luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
-  struct dev_monome *md = lua_touserdata(l, 1);
-  int z = (int) luaL_checkinteger(l, 2); // don't convert value!
-  dev_monome_all_led(md, z);
-  lua_settop(l, 0);
-  return 0;
+  struct dev_common *dev = lua_touserdata(l, 1);
+  switch (dev->type) {
+    case DEV_TYPE_PUSH2: {
+      return push2_grid_all_led(l);
+    } 
+    case DEV_TYPE_MONOME:
+    default: {
+      struct dev_monome *md = (struct dev_monome*) dev;
+      int z = (int) luaL_checkinteger(l, 2); // don't convert value!
+      dev_monome_all_led(md, z);
+      lua_settop(l, 0);
+      return 0;
+    }
+  }
 }
 
 /***
@@ -1016,10 +1034,19 @@ int _grid_refresh(lua_State *l) {
   }
 
   luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
-  struct dev_monome *md = lua_touserdata(l, 1);
-  dev_monome_refresh(md);
-  lua_settop(l, 0);
-  return 0;
+  struct dev_common *dev = lua_touserdata(l, 1);
+  switch (dev->type) {
+    case DEV_TYPE_PUSH2: {
+      return push2_grid_refresh(l);
+    } 
+    case DEV_TYPE_MONOME:
+    default: {
+      struct dev_monome *md = (struct dev_monome*) dev;
+      dev_monome_refresh(md);
+      lua_settop(l, 0);
+      return 0;
+    }
+  }
 }
 
 /***
@@ -1033,9 +1060,18 @@ int _grid_rows(lua_State *l) {
   }
 
   luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
-  struct dev_monome *md = lua_touserdata(l, 1);
-  lua_pushinteger(l, dev_monome_grid_rows(md));
-  return 1;
+  struct dev_common *dev = lua_touserdata(l, 1);
+  switch (dev->type) {
+    case DEV_TYPE_PUSH2: {
+      return push2_grid_rows(l);
+    } 
+    case DEV_TYPE_MONOME:
+    default: {
+      struct dev_monome *md = (struct dev_monome*) dev;
+      lua_pushinteger(l, dev_monome_grid_rows(md));
+      return 1;
+    }
+  }
 }
 
 /***
@@ -1049,9 +1085,18 @@ int _grid_cols(lua_State *l) {
   }
 
   luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
-  struct dev_monome *md = lua_touserdata(l, 1);
-  lua_pushinteger(l, dev_monome_grid_cols(md));
-  return 1;
+  struct dev_common *dev = lua_touserdata(l, 1);
+  switch (dev->type) {
+    case DEV_TYPE_PUSH2: {
+      return push2_grid_cols(l);
+    } 
+    case DEV_TYPE_MONOME:
+    default: {
+      struct dev_monome *md = (struct dev_monome*) dev;
+      lua_pushinteger(l, dev_monome_grid_cols(md));
+      return 1;
+    }
+  }
 }
 
 //-- audio processing controls
