@@ -45,7 +45,7 @@ void push2d_init();
 
 
 void dev_push2_cursor_left(void *self);
-void dev_push2_cursor_right(void *self); 
+void dev_push2_cursor_right(void *self);
 void dev_push2_layout(void *self);
 
 
@@ -182,7 +182,7 @@ int dev_push2_init(void *self) {
     base->deinit = &dev_push2_deinit;
 
 
-    pthread_mutex_init(&push2_midilock,0);
+    pthread_mutex_init(&push2_midilock, 0);
 
     // midi
     unsigned int alsa_card;
@@ -197,17 +197,17 @@ int dev_push2_init(void *self) {
     }
 
     int mode = SND_RAWMIDI_NONBLOCK;
-    if (snd_rawmidi_open(&push2->handle_in, &push2->handle_out, alsa_name, mode) < 0) {
+    if (snd_rawmidi_open(&push2->handle_in_, &push2->handle_out_, alsa_name, mode) < 0) {
         fprintf(stderr, "push2: failed to open alsa device %s\n", alsa_name);
         return -1;
     }
 
-    for(int i=0;i<128;i++) {
-        push2->midi_note_state[i] = 0;
-        push2->midi_cc_state[i] = 0;
+    for (int i = 0; i < 128; i++) {
+        push2->midi_note_state_[i] = 0;
+        push2->midi_cc_state_[i] = 0;
     }
 
-    push2->cuckoo_ = true;
+    push2->display_mode_ = P2DM_NORNS ;
 
 
     push2->dataPkt_ = calloc(PUSH2_DATA_PKT_SZ, sizeof(unsigned char));
@@ -243,7 +243,7 @@ int dev_push2_init(void *self) {
     push2->screen_[1] = cairo_create (push2->screenSurface_[1]);
     cairo_scale(push2->screen_[1], 2.0f, 2.0f);
 
-    if(defaultScreen == NULL) {
+    if (defaultScreen == NULL) {
         // assumes screen has been initialised before push
         // only do once, since push will overwrite
         // idea: potentially this allows us to reset it back to norns display
@@ -251,10 +251,10 @@ int dev_push2_init(void *self) {
     }
 
 
-    if (push2->cuckoo_) {
+    if (push2->display_mode_ == P2DM_NORNS ) {
         // hijack default norns screen
         screen_cr((void*) push2->screen_[1], (void*) push2->screen_[0]);
-    }
+    } // else P2DM_NATIVE
     cairo_set_operator(push2->screen_[0], CAIRO_OPERATOR_SOURCE);
     cairo_set_source_surface(push2->screen_[0], push2->screenSurface_[1], 0, 0);
 
@@ -294,27 +294,27 @@ int dev_push2_init(void *self) {
 
     if (defaultPush2 == NULL) defaultPush2 = push2;
 
-    push2->midi_octave = 1;
-    push2->midi_mode = false;
-    push2->grid_page = 0;
-    push2->grid_state = calloc(GRID_X * GRID_Y, sizeof(uint8_t));
-    push2->grid_state_buf = calloc(GRID_X * GRID_Y, sizeof(uint8_t));
-    memset(push2->grid_state, 0, GRID_X * GRID_Y * sizeof(uint8_t));
-    memset(push2->grid_state_buf, 0, GRID_X * GRID_Y * sizeof(uint8_t));
+    push2->midi_octave_ = 1;
+    push2->pad_mode_ = P2PM_GRID;
+    push2->grid_page_ = 0;
+    push2->grid_state_ = calloc(GRID_X * GRID_Y, sizeof(uint8_t));
+    push2->grid_state_buf_ = calloc(GRID_X * GRID_Y, sizeof(uint8_t));
+    memset(push2->grid_state_, 0, GRID_X * GRID_Y * sizeof(uint8_t));
+    memset(push2->grid_state_buf_, 0, GRID_X * GRID_Y * sizeof(uint8_t));
 
-    dev_push2_midi_send_cc(self, P2_OCTAVE_DOWN_CC,    (!push2->midi_mode ? 0x00 : (push2->midi_octave > 0 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
-    dev_push2_midi_send_cc(self, P2_OCTAVE_UP_CC,      (!push2->midi_mode ? 0x00 : (push2->midi_octave < 7 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
+    dev_push2_midi_send_cc(self, P2_OCTAVE_DOWN_CC,    (push2->pad_mode_ == P2PM_GRID ? 0x00 : (push2->midi_octave_ > 0 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
+    dev_push2_midi_send_cc(self, P2_OCTAVE_UP_CC,      (push2->pad_mode_ == P2PM_GRID ? 0x00 : (push2->midi_octave_ < 7 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
 
-    dev_push2_midi_send_cc(self, P2_CURSOR_LEFT_CC, (push2->grid_page > 0) ?  P2_CLR_W_ON : P2_CLR_W_AVAIL);
-    dev_push2_midi_send_cc(self, P2_CURSOR_RIGHT_CC, (push2->grid_page < (GRID_X / PUSH2_GRID_X) - 1) ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
-    dev_push2_midi_send_cc(self, P2_LAYOUT_CC, push2->midi_mode ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
+    dev_push2_midi_send_cc(self, P2_CURSOR_LEFT_CC, (push2->grid_page_ > 0) ?  P2_CLR_W_ON : P2_CLR_W_AVAIL);
+    dev_push2_midi_send_cc(self, P2_CURSOR_RIGHT_CC, (push2->grid_page_ < (GRID_X / PUSH2_GRID_X) - 1) ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
+    dev_push2_midi_send_cc(self, P2_LAYOUT_CC, push2->pad_mode_ == P2PM_NOTE ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
 
 
-    dev_push2_midi_send_cc(self, P2_USER_CC, push2->cuckoo_ ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
-    dev_push2_midi_send_cc(self, P2_SETUP_CC, push2->cuckoo_ ? 0 : P2_CLR_W_AVAIL);
+    dev_push2_midi_send_cc(self, P2_USER_CC,  push2->display_mode_ == P2DM_NORNS ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
+    dev_push2_midi_send_cc(self, P2_SETUP_CC, push2->display_mode_ == P2DM_NORNS ? 0 : P2_CLR_W_AVAIL);
 
-    for(int i=P2_DEV_SELECT_CC_START;i<=P2_DEV_SELECT_CC_END;i++) {
-        dev_push2_midi_send_cc(self, i, (i> P2_DEV_SELECT_CC_START + 2) ? 0 : P2_CLR_W_AVAIL);
+    for (int i = P2_DEV_SELECT_CC_START; i <= P2_DEV_SELECT_CC_END; i++) {
+        dev_push2_midi_send_cc(self, i, (i > P2_DEV_SELECT_CC_START + 2) ? 0 : P2_CLR_W_AVAIL);
     }
 
     dev_push2_grid_state_all(push2, 0);
@@ -329,8 +329,8 @@ void dev_push2_deinit(void *self) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
 
     // midi
-    snd_rawmidi_close(push2->handle_in);
-    snd_rawmidi_close(push2->handle_out);
+    snd_rawmidi_close(push2->handle_in_);
+    snd_rawmidi_close(push2->handle_out_);
 
     // loop
     push2->running_ = false;
@@ -355,9 +355,9 @@ void dev_push2_deinit(void *self) {
     if (push2->screenBuf_[1]) {free(push2->screenBuf_[1]); push2->screenBuf_[1] = NULL;}
     if (push2->pushBuf_[0]) {free(push2->pushBuf_[0]); push2->pushBuf_[0] = NULL;}
     if (push2->pushBuf_[1]) {free(push2->pushBuf_[1]); push2->pushBuf_[1] = NULL;}
-    if (push2->dataPkt_) {free(push2->dataPkt_); push2->grid_state = NULL;}
-    if (push2->grid_state) {free(push2->grid_state); push2->dataPkt_ = NULL;}
-    if (push2->grid_state_buf) {free(push2->grid_state_buf); push2->grid_state_buf = NULL;}
+    if (push2->dataPkt_) {free(push2->dataPkt_); push2->grid_state_ = NULL;}
+    if (push2->grid_state_) {free(push2->grid_state_); push2->dataPkt_ = NULL;}
+    if (push2->grid_state_buf_) {free(push2->grid_state_buf_); push2->grid_state_buf_ = NULL;}
 
     if (defaultPush2 == push2) defaultPush2 = NULL;
 
@@ -381,47 +381,47 @@ void* dev_push2_start(void *self) {
         dev_push2_midi_read(self, msg_buf, &msg_pos, &msg_len);
 
         if ((count % 32) == 0) render(self); //~30fps
-	else if ((count % 16) == 0) {  // how often to refresh leds
+        else if ((count % 16) == 0) {  // how often to refresh leds
             unsigned sendcount = 64; // how many in one go
 
             uint8_t msg[3] = {P2_MIDI_NOTE_ON, 0, 0};
-	    uint8_t n = sizeof(msg);
+            uint8_t n = sizeof(msg);
             msg[0] = P2_MIDI_NOTE_ON;
-            for(int i=0;i<128 && sendcount > 0 ;i++ ) {
+            for (int i = 0; i < 128 && sendcount > 0 ; i++ ) {
 
                 // pthread_mutex_lock(&push2_midilock);
-                unsigned v = push2->midi_note_state[i];
+                unsigned v = push2->midi_note_state_[i];
 
-                if(v < 128 ) {
+                if (v < 128 ) {
                     msg[1] = i;
                     msg[2] = v;
-                    if(dev_push2_midi_send(self, msg,n)==n ) {
-			    push2->midi_note_state[i] = v | 0b10000000;
-			    sendcount--;
-		    }
-		    else {
-			    sendcount=0;
-		    }
+                    if (dev_push2_midi_send(self, msg, n) == n ) {
+                        push2->midi_note_state_[i] = v | 0b10000000;
+                        sendcount--;
+                    }
+                    else {
+                        sendcount = 0;
+                    }
                 }
                 // pthread_mutex_unlock(&push2_midilock);
             }
 
             msg[0] = P2_MIDI_CC;
-            for(int i=0;i<128 && sendcount > 0 ;i++ ) {
+            for (int i = 0; i < 128 && sendcount > 0 ; i++ ) {
 
                 // pthread_mutex_lock(&push2_midilock);
-                unsigned v = push2->midi_cc_state[i];
+                unsigned v = push2->midi_cc_state_[i];
 
-                if(v < 128 ) {
+                if (v < 128 ) {
                     msg[1] = i;
                     msg[2] = v;
-                    if(dev_push2_midi_send(self, msg,n)==n ) {
-			    push2->midi_cc_state[i] = v | 0b10000000;
-			    sendcount--;
-		    }
-		    else {
-			    sendcount=0;
-		    }
+                    if (dev_push2_midi_send(self, msg, n) == n ) {
+                        push2->midi_cc_state_[i] = v | 0b10000000;
+                        sendcount--;
+                    }
+                    else {
+                        sendcount = 0;
+                    }
                 }
                 // pthread_mutex_unlock(&push2_midilock);
             }
@@ -438,20 +438,20 @@ void* dev_push2_start(void *self) {
 
 
 void dev_push2_event(void* self, uint8_t op) {
-    switch(op) {
-        case P2_OP_LAYOUT : {
-            dev_push2_layout(self);
-            break;
-        }
-        case P2_OP_CURSOR_LEFT : {
-            dev_push2_cursor_left(self);
-            break;
-        }
-        case P2_OP_CURSOR_RIGHT : {
-            dev_push2_cursor_right(self);
-            break;
-        }
-        default:
+    switch (op) {
+    case P2_OP_LAYOUT : {
+        dev_push2_layout(self);
+        break;
+    }
+    case P2_OP_CURSOR_LEFT : {
+        dev_push2_cursor_left(self);
+        break;
+    }
+    case P2_OP_CURSOR_RIGHT : {
+        dev_push2_cursor_right(self);
+        break;
+    }
+    default:
         break;
     }
 
@@ -467,7 +467,7 @@ int render(void *self ) {
     int tfrsize = 0;
     int r = 0;
     unsigned char* scrbuf = push2->screenBuf_[0];
-    if (!push2->cuckoo_) scrbuf = push2->pushBuf_[0];
+    if (push2->display_mode_ == P2DM_NATIVE) scrbuf = push2->pushBuf_[0];
 
     for (int y = 0; y < PUSH2_HEIGHT; y++) {
         for (int x = 0; x < PUSH2_LINE; x += 4) {
@@ -544,15 +544,15 @@ void dev_push2_event_send(void* self, uint8_t op) {
 
 void dev_push2_grid_state(void* self, uint8_t x, uint8_t y, uint8_t z) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
-    GRID_STATE(push2->grid_state, x, y) = z;
-    // *(push2->grid_state + x + (y * GRID_X) ) = z;
+    GRID_STATE(push2->grid_state_, x, y) = z;
+    // *(push2->grid_state_ + x + (y * GRID_X) ) = z;
 }
 
 void dev_push2_grid_state_all(void* self, uint8_t z) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
     for (int y = 0; y < GRID_Y; y++) {
         for (int x = 0; x < GRID_X; x++) {
-            GRID_STATE(push2->grid_state, x, y) = z;
+            GRID_STATE(push2->grid_state_, x, y) = z;
         }
     }
 }
@@ -560,24 +560,23 @@ void dev_push2_grid_state_all(void* self, uint8_t z) {
 void dev_push2_grid_refresh(void* self, bool force) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
 
-
-    if (!push2->midi_mode) { // grid emulation
-        int offset = push2->grid_page * PUSH2_GRID_X;
+    if (push2->pad_mode_ == P2PM_GRID) { // grid emulation
+        int offset = push2->grid_page_ * PUSH2_GRID_X;
         int end = offset + PUSH2_GRID_X;
 
         for (int y = 0; y < GRID_Y; y++) {
             for (int x = offset; x < end; x++) {
-                uint8_t z =  GRID_STATE(push2->grid_state, x, y) ;
-                uint8_t z1 =  GRID_STATE(push2->grid_state_buf, x, y) ;
+                uint8_t z =  GRID_STATE(push2->grid_state_, x, y) ;
+                uint8_t z1 =  GRID_STATE(push2->grid_state_buf_, x, y) ;
                 if (z != z1 || force) {
-                    GRID_STATE(push2->grid_state_buf, x, y) = z;
+                    GRID_STATE(push2->grid_state_buf_, x, y) = z;
                     unsigned note = P2_NOTE_PAD_START + ((PUSH2_GRID_Y - y - 1) * PUSH2_GRID_X) + ( x - offset );
                     unsigned vel = (z > 0 ? ( z == 15 ? 122 : 9 + z) : 0);
-                    dev_push2_midi_send_note(self,note,vel);
+                    dev_push2_midi_send_note(self, note, vel);
                 }
             }
         }
-    } else {
+    } else { // P2PM_NOTE
         if (force) { //ignore update grid events.
             for (int y = 0; y < PUSH2_GRID_Y; y++ ) {
                 const int rowOffset = 5;
@@ -588,7 +587,7 @@ void dev_push2_grid_refresh(void* self, bool force) {
                     int v = (scale & (1 << ( 11 - i)));
                     uint8_t clr = (i == 0 ? PAD_NOTE_ROOT_CLR : (v > 0 ? PAD_NOTE_IN_KEY_CLR : PAD_NOTE_OFF_CLR));
                     uint8_t note = P2_NOTE_PAD_START + (y * PUSH2_GRID_X)  + x;
-                    dev_push2_midi_send_note(self,note,clr);
+                    dev_push2_midi_send_note(self, note, clr);
                 }
             }
         }
@@ -608,7 +607,7 @@ void dev_push2_midi_read(void *self, uint8_t* msg_buf, uint8_t* msg_pos, uint8_t
     uint8_t byte = 0;
 
     do {
-        read = snd_rawmidi_read(push2->handle_in, &byte, 1);
+        read = snd_rawmidi_read(push2->handle_in_, &byte, 1);
 
         if (byte >= 0x80) {
             // control byte
@@ -667,7 +666,7 @@ void dev_push2_midi_read(void *self, uint8_t* msg_buf, uint8_t* msg_pos, uint8_t
 
         if (*msg_pos == *msg_len) {
             ev = event_data_new(EVENT_MIDI_EVENT);
-            ev->midi_event.id = push2->dev.id + PUSH2_DEV_OFFSET;
+            ev->midi_event.id = push2->dev_.id + PUSH2_DEV_OFFSET;
             ev->midi_event.data[0] = msg_buf[0];
             ev->midi_event.data[1] = *msg_len > 1 ? msg_buf[1] : 0;
             ev->midi_event.data[2] = *msg_len > 2 ? msg_buf[2] : 0;
@@ -688,12 +687,12 @@ void push2_handle_midi(void* self, union event_data* evin) {
         int8_t cc = evin->midi_event.data[1];
         int8_t data = evin->midi_event.data[2];
         if (cc == P2_USER_CC && data > 0) {
-            push2->cuckoo_ = ! push2->cuckoo_;
-            dev_push2_midi_send_cc(self, P2_USER_CC,  push2->cuckoo_ ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
-            dev_push2_midi_send_cc(self, P2_SETUP_CC, push2->cuckoo_ ? 0 : P2_CLR_W_AVAIL);
-            for(int i=P2_DEV_SELECT_CC_START;i<=P2_DEV_SELECT_CC_END;i++) {
-                dev_push2_midi_send_cc(self, i, (i> P2_DEV_SELECT_CC_START + 2 || !push2->cuckoo_) 
-                                        ? 0 : P2_CLR_W_AVAIL);
+            push2->display_mode_ = (push2->display_mode_  == P2DM_NORNS ? P2DM_NATIVE : P2DM_NORNS);
+            dev_push2_midi_send_cc(self, P2_USER_CC,  push2->display_mode_ == P2DM_NORNS ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
+            dev_push2_midi_send_cc(self, P2_SETUP_CC, push2->display_mode_ == P2DM_NORNS ? 0 : P2_CLR_W_AVAIL);
+            for (int i = P2_DEV_SELECT_CC_START; i <= P2_DEV_SELECT_CC_END; i++) {
+                dev_push2_midi_send_cc(self, i, (i > P2_DEV_SELECT_CC_START + 2 || push2->display_mode_ == P2DM_NATIVE )
+                                       ? 0 : P2_CLR_W_AVAIL);
             }
             return;
         }
@@ -709,7 +708,7 @@ void push2_handle_midi(void* self, union event_data* evin) {
         }
     }
 
-    if (!push2->cuckoo_) {
+    if (push2->display_mode_  == P2DM_NATIVE ) {
         event_post(evin);
         return;
     }
@@ -724,36 +723,36 @@ void push2_handle_midi(void* self, union event_data* evin) {
         int8_t note = evin->midi_event.data[1];
         int8_t data = evin->midi_event.data[2];
         if (note >= P2_NOTE_PAD_START && note <= P2_NOTE_PAD_END) {
-            if (!push2->midi_mode) {
+            if (push2->pad_mode_ == P2PM_GRID) {
                 // send grid key event
-                int x = ((note - P2_NOTE_PAD_START) % PUSH2_GRID_X  ) + (push2->grid_page * PUSH2_GRID_X);
+                int x = ((note - P2_NOTE_PAD_START) % PUSH2_GRID_X  ) + (push2->grid_page_ * PUSH2_GRID_X);
                 int y = PUSH2_GRID_Y - ((note - P2_NOTE_PAD_START) / PUSH2_GRID_X) - 1;
                 union event_data *ev = event_data_new(EVENT_GRID_KEY);
-                ev->grid_key.id = push2->dev.id + PUSH2_DEV_OFFSET;
+                ev->grid_key.id = push2->dev_.id + PUSH2_DEV_OFFSET;
                 ev->grid_key.x = x;
                 ev->grid_key.y = y;
                 ev->grid_key.state = (type == P2_MIDI_NOTE_ON) && (data > 0);
                 // fprintf(stderr, "key %d\t%d\t%d\t%d\n", ev->grid_key.id, ev->grid_key.x, ev->grid_key.y , ev->grid_key.state);
                 event_post(ev);
-            } else {
+            } else { // P2PM_NONE
                 const int tonic = 0;
                 const int rowOffset = 5;
                 int x = (note - P2_NOTE_PAD_START) % PUSH2_GRID_X;
                 int y =  (note - P2_NOTE_PAD_START) / PUSH2_GRID_X;
-                int noteout = (push2->midi_octave * 12)  + (y * rowOffset) + x + tonic;
+                int noteout = (push2->midi_octave_ * 12)  + (y * rowOffset) + x + tonic;
                 evin->midi_event.data[1] = noteout;
                 // fprintf(stderr, "midi  0x%02x\t%d\t%d\n", evin->midi_event.data[0], evin->midi_event.data[1], evin->midi_event.data[2]);
                 event_post(evin);
 
-	        uint8_t clr = PAD_NOTE_ON_CLR;
-		if(type == P2_MIDI_NOTE_OFF || data == 0) {
+                uint8_t clr = PAD_NOTE_ON_CLR;
+                if (type == P2_MIDI_NOTE_OFF || data == 0) {
                     const int scale = 0b101011010101;
                     int note_s = (y * rowOffset) + x;
                     int i = note_s %  12;
                     int v = (scale & (1 << ( 11 - i)));
-	            clr = (i == 0 ? PAD_NOTE_ROOT_CLR : (v > 0 ? PAD_NOTE_IN_KEY_CLR : PAD_NOTE_OFF_CLR));
-		}
-	        dev_push2_midi_send_note(self,note,clr);
+                    clr = (i == 0 ? PAD_NOTE_ROOT_CLR : (v > 0 ? PAD_NOTE_IN_KEY_CLR : PAD_NOTE_OFF_CLR));
+                }
+                dev_push2_midi_send_note(self, note, clr);
             }
             return;
         }
@@ -801,40 +800,40 @@ void push2_handle_midi(void* self, union event_data* evin) {
         } else {
             switch (cc) {
             case P2_CURSOR_LEFT_CC : {
-                if (data)  {
-                    dev_push2_event_send(self,P2_OP_CURSOR_LEFT);
+                if (data && push2->pad_mode_ == P2PM_GRID)  {
+                    dev_push2_event_send(self, P2_OP_CURSOR_LEFT);
                 }
                 break;
             }
             case P2_CURSOR_RIGHT_CC : {
-                if (data)  {
-                    dev_push2_event_send(self,P2_OP_CURSOR_RIGHT);
+                if (data && push2->pad_mode_ == P2PM_GRID)  {
+                    dev_push2_event_send(self, P2_OP_CURSOR_RIGHT);
                 }
                 break;
             }
             case P2_OCTAVE_DOWN_CC : {
-                if (data && push2->midi_mode) {
-                    if (push2->midi_octave > 0) {
-                        push2->midi_octave--;
-                        dev_push2_midi_send_cc(self, P2_OCTAVE_DOWN_CC,    (!push2->midi_mode ? 0x00 : (push2->midi_octave > 0 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
-                        dev_push2_midi_send_cc(self, P2_OCTAVE_UP_CC,      (!push2->midi_mode ? 0x00 : (push2->midi_octave < 7 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
+                if (data && push2->pad_mode_ == P2PM_NOTE) {
+                    if (push2->midi_octave_ > 0) {
+                        push2->midi_octave_--;
+                        dev_push2_midi_send_cc(self, P2_OCTAVE_DOWN_CC,    (push2->pad_mode_ == P2PM_GRID  ? 0x00 : (push2->midi_octave_ > 0 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
+                        dev_push2_midi_send_cc(self, P2_OCTAVE_UP_CC,      (push2->pad_mode_ == P2PM_GRID ? 0x00 : (push2->midi_octave_ < 7 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
                     }
                 }
                 break;
             }
             case P2_OCTAVE_UP_CC : {
-                if (data && push2->midi_mode) {
-                    if (push2->midi_octave < 7) {
-                        push2->midi_octave++;
-                        dev_push2_midi_send_cc(self, P2_OCTAVE_DOWN_CC,    (!push2->midi_mode ? 0x00 : (push2->midi_octave > 0 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
-                        dev_push2_midi_send_cc(self, P2_OCTAVE_UP_CC,      (!push2->midi_mode ? 0x00 : (push2->midi_octave < 7 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
+                if (data && push2->pad_mode_ == P2PM_NOTE) {
+                    if (push2->midi_octave_ < 7) {
+                        push2->midi_octave_++;
+                        dev_push2_midi_send_cc(self, P2_OCTAVE_DOWN_CC,    (push2->pad_mode_ == P2PM_GRID ? 0x00 : (push2->midi_octave_ > 0 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
+                        dev_push2_midi_send_cc(self, P2_OCTAVE_UP_CC,      (push2->pad_mode_ == P2PM_GRID ? 0x00 : (push2->midi_octave_ < 7 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
                     }
                 }
                 break;
             }
             case P2_LAYOUT_CC : {
                 if (data) {
-                    dev_push2_event_send(self,P2_OP_LAYOUT);
+                    dev_push2_event_send(self, P2_OP_LAYOUT);
                 }
                 break;
             }
@@ -850,47 +849,48 @@ void push2_handle_midi(void* self, union event_data* evin) {
 
 void dev_push2_cursor_left(void *self) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
-    if (!push2->midi_mode && push2->grid_page > 0)  {
-        push2->grid_page--;
-        dev_push2_midi_send_cc(self, P2_CURSOR_LEFT_CC, (push2->grid_page > 0) ?  P2_CLR_W_ON : P2_CLR_W_AVAIL);
-        dev_push2_midi_send_cc(self, P2_CURSOR_RIGHT_CC, (push2->grid_page < (GRID_X / PUSH2_GRID_X) - 1) ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
-        dev_push2_grid_refresh(self,true);
+    if (push2->pad_mode_ == P2PM_GRID && push2->grid_page_ > 0)  {
+        push2->grid_page_--;
+        dev_push2_midi_send_cc(self, P2_CURSOR_LEFT_CC, (push2->grid_page_ > 0) ?  P2_CLR_W_ON : P2_CLR_W_AVAIL);
+        dev_push2_midi_send_cc(self, P2_CURSOR_RIGHT_CC, (push2->grid_page_ < (GRID_X / PUSH2_GRID_X) - 1) ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
+        dev_push2_grid_refresh(self, true);
     }
 }
 
 void dev_push2_cursor_right(void *self) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
-    if (!push2->midi_mode && push2->grid_page <  ((GRID_X / PUSH2_GRID_X) - 1))  {
-        push2->grid_page++;
-        dev_push2_midi_send_cc(self, P2_CURSOR_LEFT_CC, (push2->grid_page > 0) ?  P2_CLR_W_ON : P2_CLR_W_AVAIL);
-        dev_push2_midi_send_cc(self, P2_CURSOR_RIGHT_CC, (push2->grid_page < (GRID_X / PUSH2_GRID_X) - 1) ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
-        dev_push2_grid_refresh(self,true);
+    if (push2->pad_mode_ == P2PM_GRID && push2->grid_page_ <  ((GRID_X / PUSH2_GRID_X) - 1))  {
+        push2->grid_page_++;
+        dev_push2_midi_send_cc(self, P2_CURSOR_LEFT_CC, (push2->grid_page_ > 0) ?  P2_CLR_W_ON : P2_CLR_W_AVAIL);
+        dev_push2_midi_send_cc(self, P2_CURSOR_RIGHT_CC, (push2->grid_page_ < (GRID_X / PUSH2_GRID_X) - 1) ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
+        dev_push2_grid_refresh(self, true);
     }
 }
 
 
 void dev_push2_layout(void *self) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
-    push2->midi_mode = ! push2->midi_mode;
-    dev_push2_midi_send_cc(self, P2_LAYOUT_CC, push2->midi_mode ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
-    if (push2->midi_mode) {
+    push2->pad_mode_ = ( push2->pad_mode_ == P2PM_GRID ? P2PM_NOTE : P2PM_GRID) ;
+    dev_push2_midi_send_cc(self, P2_LAYOUT_CC, push2->pad_mode_ == P2PM_NOTE ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
+    if (push2->pad_mode_ == P2PM_NOTE) {
         dev_push2_midi_send_cc(self, P2_CURSOR_LEFT_CC, 0);
         dev_push2_midi_send_cc(self, P2_CURSOR_RIGHT_CC, 0);
     } else {
-        dev_push2_midi_send_cc(self, P2_CURSOR_LEFT_CC, (push2->grid_page > 0) ?  P2_CLR_W_ON : P2_CLR_W_AVAIL);
-        dev_push2_midi_send_cc(self, P2_CURSOR_RIGHT_CC, (push2->grid_page < (GRID_X / PUSH2_GRID_X) - 1) ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
+        dev_push2_midi_send_cc(self, P2_CURSOR_LEFT_CC, (push2->grid_page_ > 0) ?  P2_CLR_W_ON : P2_CLR_W_AVAIL);
+        dev_push2_midi_send_cc(self, P2_CURSOR_RIGHT_CC, (push2->grid_page_ < (GRID_X / PUSH2_GRID_X) - 1) ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
     }
-    dev_push2_grid_refresh(self,true);
-    dev_push2_midi_send_cc(self, P2_OCTAVE_DOWN_CC,    (!push2->midi_mode ? 0x00 : (push2->midi_octave > 0 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
-    dev_push2_midi_send_cc(self, P2_OCTAVE_UP_CC,      (!push2->midi_mode ? 0x00 : (push2->midi_octave < 7 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
+
+    dev_push2_grid_refresh(self, true);
+    dev_push2_midi_send_cc(self, P2_OCTAVE_DOWN_CC,    (push2->pad_mode_ == P2PM_GRID ? 0x00 : (push2->midi_octave_ > 0 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
+    dev_push2_midi_send_cc(self, P2_OCTAVE_UP_CC,      (push2->pad_mode_ == P2PM_GRID ? 0x00 : (push2->midi_octave_ < 7 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
 }
 
 ssize_t dev_push2_midi_send(void *self, uint8_t *data, size_t n) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
-    if(snd_rawmidi_write(push2->handle_out, data, n) == (int) n) {
-	    if(snd_rawmidi_drain(push2->handle_out) >=0) {
-		    return n;
-	    }
+    if (snd_rawmidi_write(push2->handle_out_, data, n) == (int) n) {
+        if (snd_rawmidi_drain(push2->handle_out_) >= 0) {
+            return n;
+        }
     }
     return -1;
 }
@@ -899,8 +899,8 @@ ssize_t dev_push2_midi_send(void *self, uint8_t *data, size_t n) {
 void dev_push2_midi_send_note(void *self, uint8_t note, uint8_t vel) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
     // pthread_mutex_lock(&push2_midilock);
-    if(vel != ( push2->midi_note_state[note] & 0b01111111 )) {
-        push2->midi_note_state[note] = vel;
+    if (vel != ( push2->midi_note_state_[note] & 0b01111111 )) {
+        push2->midi_note_state_[note] = vel;
     }
     // pthread_mutex_unlock(&push2_midilock);
 
@@ -909,8 +909,8 @@ void dev_push2_midi_send_note(void *self, uint8_t note, uint8_t vel) {
 void dev_push2_midi_send_cc(void *self, uint8_t cc, uint8_t v) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
     // pthread_mutex_lock(&push2_midilock);
-    if(v != ( push2->midi_cc_state[cc] & 0b01111111)) {
-        push2->midi_cc_state[cc] = v;
+    if (v != ( push2->midi_cc_state_[cc] & 0b01111111)) {
+        push2->midi_cc_state_[cc] = v;
     }
     // pthread_mutex_unlock(&push2_midilock);
 }
@@ -1163,12 +1163,12 @@ int _push2d_line_cap(lua_State *l) {
     struct dev_push2 *dev = lua_touserdata(l, 1);
     const char *style = luaL_checkstring(l, 2);
 
-    if(strcmp(style, "round") == 0){
-      cairo_set_line_cap(dev->pushDispl_[1],CAIRO_LINE_CAP_ROUND);
-    }else if(strcmp(style, "square") == 0){
-      cairo_set_line_cap(dev->pushDispl_[1],CAIRO_LINE_CAP_SQUARE);
-    }else{
-      cairo_set_line_cap(dev->pushDispl_[1],CAIRO_LINE_CAP_BUTT);
+    if (strcmp(style, "round") == 0) {
+        cairo_set_line_cap(dev->pushDispl_[1], CAIRO_LINE_CAP_ROUND);
+    } else if (strcmp(style, "square") == 0) {
+        cairo_set_line_cap(dev->pushDispl_[1], CAIRO_LINE_CAP_SQUARE);
+    } else {
+        cairo_set_line_cap(dev->pushDispl_[1], CAIRO_LINE_CAP_BUTT);
     }
 
     lua_settop(l, 0);
@@ -1184,12 +1184,12 @@ int _push2d_line_join(lua_State *l) {
     struct dev_push2 *dev = lua_touserdata(l, 1);
     const char *style = luaL_checkstring(l, 2);
 
-    if(strcmp(style, "round") == 0){
-      cairo_set_line_join(dev->pushDispl_[1],CAIRO_LINE_JOIN_ROUND);
-    }else if(strcmp(style, "bevel") == 0){
-      cairo_set_line_join(dev->pushDispl_[1],CAIRO_LINE_JOIN_BEVEL);
-    }else{
-      cairo_set_line_join(dev->pushDispl_[1],CAIRO_LINE_JOIN_MITER);
+    if (strcmp(style, "round") == 0) {
+        cairo_set_line_join(dev->pushDispl_[1], CAIRO_LINE_JOIN_ROUND);
+    } else if (strcmp(style, "bevel") == 0) {
+        cairo_set_line_join(dev->pushDispl_[1], CAIRO_LINE_JOIN_BEVEL);
+    } else {
+        cairo_set_line_join(dev->pushDispl_[1], CAIRO_LINE_JOIN_MITER);
     }
 
     lua_settop(l, 0);
@@ -1203,7 +1203,7 @@ int _push2d_miter_limit(lua_State *l) {
 
     struct dev_push2 *dev = lua_touserdata(l, 1);
     double limit = luaL_checknumber(l, 2);
-    cairo_set_miter_limit(dev->pushDispl_[1],limit);
+    cairo_set_miter_limit(dev->pushDispl_[1], limit);
 
     lua_settop(l, 0);
     return 0;
@@ -1427,9 +1427,9 @@ int _push2d_update(lua_State *l) {
     struct dev_push2 *push2 = lua_touserdata(l, 1);
 
     if (push2 == defaultPush2) {
-        defaultPush2->cuckoo_ = false;
-        dev_push2_midi_send_cc(push2, P2_USER_CC,  push2->cuckoo_ ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
-        dev_push2_midi_send_cc(push2, P2_SETUP_CC, push2->cuckoo_ ? 0 : P2_CLR_W_AVAIL);
+        defaultPush2->display_mode_ = P2DM_NATIVE;
+        dev_push2_midi_send_cc(push2, P2_USER_CC,  push2->display_mode_ == P2DM_NORNS ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
+        dev_push2_midi_send_cc(push2, P2_SETUP_CC, push2->display_mode_ == P2DM_NORNS ? 0 : P2_CLR_W_AVAIL);
     }
 
     cairo_paint(push2->pushDispl_[0]);
@@ -1443,11 +1443,11 @@ int _push2_screen_update(lua_State *l) {
         return luaL_error(l, "wrong number of arguments");
     }
 
-    defaultPush2->cuckoo_ = true;
-    dev_push2_midi_send_cc(defaultPush2, P2_USER_CC,  defaultPush2->cuckoo_ ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
-    dev_push2_midi_send_cc(defaultPush2, P2_SETUP_CC, defaultPush2->cuckoo_ ? 0 : P2_CLR_W_AVAIL);
-    for(int i=P2_DEV_SELECT_CC_START;i<=P2_DEV_SELECT_CC_END;i++) {
-        dev_push2_midi_send_cc(defaultPush2, i, (i> P2_DEV_SELECT_CC_START + 2) ? 0 : P2_CLR_W_AVAIL);
+    defaultPush2->display_mode_ = P2DM_NORNS ;
+    dev_push2_midi_send_cc(defaultPush2, P2_USER_CC,  defaultPush2->display_mode_ == P2DM_NORNS ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
+    dev_push2_midi_send_cc(defaultPush2, P2_SETUP_CC, defaultPush2->display_mode_ == P2DM_NORNS ? 0 : P2_CLR_W_AVAIL);
+    for (int i = P2_DEV_SELECT_CC_START; i <= P2_DEV_SELECT_CC_END; i++) {
+        dev_push2_midi_send_cc(defaultPush2, i, (i > P2_DEV_SELECT_CC_START + 2) ? 0 : P2_CLR_W_AVAIL);
     }
 
     screen_update();
@@ -1461,7 +1461,7 @@ void push2_register_lua(void *self) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
 
     lua_State* lvm = (lua_State*) luaState();
-    if (push2->cuckoo_) {
+    if (push2->display_mode_  == P2DM_NORNS ) {
         lua_register(lvm, "s_update", &_push2_screen_update);
     }
 
