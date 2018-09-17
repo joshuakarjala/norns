@@ -49,6 +49,7 @@ extern void w_handle_osc_event(char *from_host,
 extern void w_handle_push2_add(void *dev);
 extern void w_handle_push2_remove(int id);
 extern void w_handle_push2_event(void*, uint8_t op);
+extern void w_handle_push2_touch(const int n, const int val);
 
 
 

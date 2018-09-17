@@ -5,10 +5,10 @@ local encoders = {}
 
 local now = util.time()
 
-encoders.tick = {0,0,0}
-encoders.accel = {true,true,true}
-encoders.sens = {1,1,1}
-encoders.time = {now,now,now}
+encoders.tick = {0,0,0,0,0,0,0,0,0,0,0}
+encoders.accel = {true,true,true,true,true,true,true,true,true,true,true}
+encoders.sens = {1,1,1,1,1,1,1,1,1,1,1}
+encoders.time = {now,now,now,now,now,now,now,now,now,now,now}
 encoders.callback = norns.none
 
 encoders.set_accel = function(n,z)
@@ -25,7 +25,7 @@ end
 
 encoders.set_sens = function(n,s)
   if n == 0 then
-    for n=1,3 do
+    for n=1,11 do
       encoders.sens[n] = util.clamp(s,0.01,1)
       encoders.tick[n] = 0
     end

@@ -264,6 +264,9 @@ static void handle_event(union event_data *ev) {
     case EVENT_PUSH2_EVENT:
         w_handle_push2_event(ev->push2_event.dev,ev->push2_event.op);
         break;
+    case EVENT_PUSH2_TOUCH:
+        w_handle_push2_touch(ev->key.n, ev->key.val);
+        break;
     case EVENT_QUIT:
         quit = true;
         break;
