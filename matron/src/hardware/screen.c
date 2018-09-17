@@ -203,6 +203,18 @@ void screen_init(void) {
 
 }
 
+void screen_deinit(void) {
+    CHECK_CR
+    cairo_destroy(crmain);
+    cairo_surface_destroy(surface);
+    cairo_destroy(crfb);
+    cairo_surface_destroy(surfacefb);
+}
+
+void screen_context(void** pcr, void **pcrfb) {
+    *pcr = cr;
+    *pcrfb = crfb;
+}
 
 void screen_cr(void *newcr,void *newcrfb) {
     status = FT_Init_FreeType(&value);
@@ -325,14 +337,6 @@ void screen_cr(void *newcr,void *newcrfb) {
     cairo_set_operator(crfb, CAIRO_OPERATOR_SOURCE);
     cairo_set_source_surface(crfb,surface,0,0);
     crfb = (cairo_t*) newcrfb;
-}
-
-void screen_deinit(void) {
-    CHECK_CR
-    cairo_destroy(crmain);
-    cairo_surface_destroy(surface);
-    cairo_destroy(crfb);
-    cairo_surface_destroy(surfacefb);
 }
 
 void screen_update(void) {
