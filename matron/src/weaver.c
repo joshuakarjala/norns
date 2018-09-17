@@ -1657,6 +1657,20 @@ void w_handle_push2_event(void *p, uint8_t op) {
 }
 
 
+void w_handle_push2_touch(const int n, const int val) {
+  // -- lua_getglobal(lvm, "norns");
+  // -- lua_getfield(lvm, -1, "touch");
+  // -- lua_remove(lvm, -2);
+
+  //TODO enable touch handling
+  if(n==0xFFFFF ) {
+    _push_norns_func("push2", "touch");
+    lua_pushinteger(lvm, n);
+    lua_pushinteger(lvm, val);
+    l_report(lvm, l_docall(lvm, 2, 0));
+  }
+}
+
 
 void w_handle_osc_event(char *from_host,
                         char *from_port,

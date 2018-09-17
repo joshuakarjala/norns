@@ -18,11 +18,13 @@
 #define PUSH2_DEV_OFFSET 10
 
 
-/// note: display mode, covers both screen and screen navigation
+// device mode
+// norns : screen mode, enc 1-3, but 1-3, predefined functions  (switch pad mode, oct/page), 16x8 grid (?)
+// native : native screen , extended enc 1-3
 typedef enum {
     P2DM_NORNS,
     P2DM_NATIVE
-} push2_display_mode_t;
+} push2_device_mode_t;
 
 
 
@@ -44,7 +46,7 @@ struct dev_push2 {
     bool running_;
 
     // screen
-    push2_display_mode_t display_mode_;
+    push2_device_mode_t device_mode_;
 
     libusb_device_handle *handle_;
     int iface_;
@@ -72,6 +74,9 @@ struct dev_push2 {
     uint8_t  midi_octave_;
     uint8_t  midi_note_state_[128];
     uint8_t  midi_cc_state_[128];
+
+    struct timespec encoderthin_[11];
+
 };
 
 extern int dev_push2_init(void *self);

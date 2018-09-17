@@ -7,10 +7,10 @@ local util = require 'util'
 
 local now = util.time()
 
-encoders.tick = {0,0,0}
-encoders.accel = {true,true,true}
-encoders.sens = {1,1,1}
-encoders.time = {now,now,now}
+encoders.tick = {0,0,0,0,0,0,0,0,0,0,0}
+encoders.accel = {true,true,true,true,true,true,true,true,true,true,true}
+encoders.sens = {1,1,1,1,1,1,1,1,1,1,1}
+encoders.time = {now,now,now,now,now,now,now,now,now,now,now}
 encoders.callback = norns.none
 
 encoders.set_accel = function(n,z)
@@ -27,7 +27,7 @@ end
 
 encoders.set_sens = function(n,s)
   if n == 0 then
-    for k=1,3 do
+    for n=1,11 do
       encoders.sens[k] = util.clamp(s,1,16)
       encoders.tick[k] = 0
     end

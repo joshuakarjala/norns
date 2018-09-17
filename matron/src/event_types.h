@@ -75,6 +75,8 @@ typedef enum {
     EVENT_PUSH2_REMOVE,
     // push2 event
     EVENT_PUSH2_EVENT,
+    // push2 touch
+    EVENT_PUSH2_TOUCH,
     // quit the event loop
     EVENT_QUIT,
     // crow add
@@ -299,6 +301,11 @@ struct event_push2_event {
     uint8_t op;
 }; // +8
 
+struct event_push2_touch {
+    struct event_common common;
+    uint8_t n;
+    uint8_t val;
+}; // +8
 
 
 union event_data {
@@ -337,4 +344,5 @@ union event_data {
     struct event_push2_add push2_add;
     struct event_push2_remove push2_remove;
     struct event_push2_event push2_event;
+    struct event_push2_touch push2_touch;
 };

@@ -46,7 +46,7 @@ void push2d_init();
 
 void dev_push2_cursor_left(void *self);
 void dev_push2_cursor_right(void *self);
-void dev_push2_layout(void *self);
+void dev_push2_pad_mode(void *self);
 
 
 
@@ -73,14 +73,21 @@ void dev_push2_layout(void *self);
 #define P2_NOTE_PAD_START       36
 #define P2_NOTE_PAD_END         (P2_NOTE_PAD_START + 63)
 
+
 #define P2_ENCODER_CC_TEMPO     14
 #define P2_ENCODER_CC_SWING     15
 #define P2_ENCODER_CC_START     71
 #define P2_ENCODER_CC_END       (P2_ENCODER_CC_START + 7)
-#define P2_ENCODER_CC_VOLUME    7
+#define P2_ENCODER_CC_VOLUME    79
 
 #define P2_NOTE_ENCODER_START   0
 #define P2_NOTE_ENCODER_END     (P2_NOTE_ENCODER_START + 7)
+#define P2_NOTE_VOL 8
+#define P2_NOTE_SWING 9
+#define P2_NOTE_TEMPO 10
+#define P2_NOTE_STRIP 12
+
+
 
 
 #define P2_DEV_SELECT_CC_START  102
@@ -108,7 +115,10 @@ void dev_push2_layout(void *self);
 #define P2_PAGE_NEXT_CC 63
 
 
+#define P2_SCALE_CC 58
 #define P2_LAYOUT_CC 31
+#define P2_NOTE_CC 50
+#define P2_SESSION_CC 51
 
 #define PAD_NOTE_ON_CLR (uint8_t) 127
 #define PAD_NOTE_OFF_CLR (uint8_t) 0
@@ -119,7 +129,7 @@ void dev_push2_layout(void *self);
 #define P2_CLR_W_ON 0x7f
 
 
-#define P2_OP_LAYOUT 0
+#define P2_OP_PAD_MODE 0
 #define P2_OP_CURSOR_LEFT 1
 #define P2_OP_CURSOR_RIGHT 2
 
@@ -207,7 +217,7 @@ int dev_push2_init(void *self) {
         push2->midi_cc_state_[i] = 0;
     }
 
-    push2->display_mode_ = P2DM_NORNS ;
+    push2->device_mode_ = P2DM_NORNS ;
 
 
     push2->dataPkt_ = calloc(PUSH2_DATA_PKT_SZ, sizeof(unsigned char));
@@ -251,7 +261,7 @@ int dev_push2_init(void *self) {
     }
 
 
-    if (push2->display_mode_ == P2DM_NORNS ) {
+    if (push2->device_mode_ == P2DM_NORNS ) {
         // hijack default norns screen
         screen_cr((void*) push2->screen_[1], (void*) push2->screen_[0]);
     } // else P2DM_NATIVE
@@ -307,11 +317,11 @@ int dev_push2_init(void *self) {
 
     dev_push2_midi_send_cc(self, P2_CURSOR_LEFT_CC, (push2->grid_page_ > 0) ?  P2_CLR_W_ON : P2_CLR_W_AVAIL);
     dev_push2_midi_send_cc(self, P2_CURSOR_RIGHT_CC, (push2->grid_page_ < (GRID_X / PUSH2_GRID_X) - 1) ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
-    dev_push2_midi_send_cc(self, P2_LAYOUT_CC, push2->pad_mode_ == P2PM_NOTE ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
+    dev_push2_midi_send_cc(self, P2_NOTE_CC, push2->pad_mode_ == P2PM_NOTE ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
 
 
-    dev_push2_midi_send_cc(self, P2_USER_CC,  push2->display_mode_ == P2DM_NORNS ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
-    dev_push2_midi_send_cc(self, P2_SETUP_CC, push2->display_mode_ == P2DM_NORNS ? 0 : P2_CLR_W_AVAIL);
+    dev_push2_midi_send_cc(self, P2_USER_CC,  push2->device_mode_ == P2DM_NORNS ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
+    dev_push2_midi_send_cc(self, P2_SETUP_CC, push2->device_mode_ == P2DM_NORNS ? 0 : P2_CLR_W_AVAIL);
 
     for (int i = P2_DEV_SELECT_CC_START; i <= P2_DEV_SELECT_CC_END; i++) {
         dev_push2_midi_send_cc(self, i, (i > P2_DEV_SELECT_CC_START + 2) ? 0 : P2_CLR_W_AVAIL);
@@ -439,8 +449,8 @@ void* dev_push2_start(void *self) {
 
 void dev_push2_event(void* self, uint8_t op) {
     switch (op) {
-    case P2_OP_LAYOUT : {
-        dev_push2_layout(self);
+    case P2_OP_PAD_MODE : {
+        dev_push2_pad_mode(self);
         break;
     }
     case P2_OP_CURSOR_LEFT : {
@@ -467,7 +477,7 @@ int render(void *self ) {
     int tfrsize = 0;
     int r = 0;
     unsigned char* scrbuf = push2->screenBuf_[0];
-    if (push2->display_mode_ == P2DM_NATIVE) scrbuf = push2->pushBuf_[0];
+    if (push2->device_mode_ == P2DM_NATIVE) scrbuf = push2->pushBuf_[0];
 
     for (int y = 0; y < PUSH2_HEIGHT; y++) {
         for (int x = 0; x < PUSH2_LINE; x += 4) {
@@ -683,38 +693,6 @@ void push2_handle_midi(void* self, union event_data* evin) {
 
     uint8_t type = evin->midi_event.data[0] & 0xF0;
 
-    if (type == P2_MIDI_CC) {
-        int8_t cc = evin->midi_event.data[1];
-        int8_t data = evin->midi_event.data[2];
-        if (cc == P2_USER_CC && data > 0) {
-            push2->display_mode_ = (push2->display_mode_  == P2DM_NORNS ? P2DM_NATIVE : P2DM_NORNS);
-            dev_push2_midi_send_cc(self, P2_USER_CC,  push2->display_mode_ == P2DM_NORNS ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
-            dev_push2_midi_send_cc(self, P2_SETUP_CC, push2->display_mode_ == P2DM_NORNS ? 0 : P2_CLR_W_AVAIL);
-            for (int i = P2_DEV_SELECT_CC_START; i <= P2_DEV_SELECT_CC_END; i++) {
-                dev_push2_midi_send_cc(self, i, (i > P2_DEV_SELECT_CC_START + 2 || push2->display_mode_ == P2DM_NATIVE )
-                                       ? 0 : P2_CLR_W_AVAIL);
-            }
-            return;
-        }
-        if (cc == P2_SETUP_CC) {
-            // setup acts as norns button 1
-            union event_data *ev = event_data_new(EVENT_KEY);
-            ev->enc.n = 1;
-            ev->enc.delta = (data > 0);
-            // perr("norns button %d %d\n", ev->enc.n, ev->enc.delta);
-            event_post(ev);
-            return;
-
-        }
-    }
-
-    if (push2->display_mode_  == P2DM_NATIVE ) {
-        event_post(evin);
-        return;
-    }
-
-    static struct timespec encoderthin[8];
-
     // uint8_t ch = ev->midi_event.data[0] & 0x0F;
     // determine if midi message is going to be interpretted or just sent on
     switch (type) {
@@ -734,7 +712,7 @@ void push2_handle_midi(void* self, union event_data* evin) {
                 ev->grid_key.state = (type == P2_MIDI_NOTE_ON) && (data > 0);
                 // fprintf(stderr, "key %d\t%d\t%d\t%d\n", ev->grid_key.id, ev->grid_key.x, ev->grid_key.y , ev->grid_key.state);
                 event_post(ev);
-            } else { // P2PM_NONE
+            } else { // P2PM_NOTE
                 const int tonic = 0;
                 const int rowOffset = 5;
                 int x = (note - P2_NOTE_PAD_START) % PUSH2_GRID_X;
@@ -755,96 +733,160 @@ void push2_handle_midi(void* self, union event_data* evin) {
                 dev_push2_midi_send_note(self, note, clr);
             }
             return;
+        } else { // touch encoders/pb
+            if (push2->device_mode_  == P2DM_NATIVE ) {
+                // send norns button evt
+                union event_data *ev = event_data_new(EVENT_PUSH2_TOUCH);
+                ev->key.n = note + 1;
+                ev->key.val = (data > 0);
+                // perr("push2 touch %d %d\n", ev->key.n, ev->key.val);
+                event_post(ev);
+                return;
+            }
         }
         break;
     }
     case P2_MIDI_CC: {
         int8_t cc = evin->midi_event.data[1];
         int8_t data = evin->midi_event.data[2];
-        if (cc >= P2_DEV_SELECT_CC_START  && cc <= P2_DEV_SELECT_CC_END) {
-            if (cc <= P2_DEV_SELECT_CC_START + 2) {
-                int8_t button = cc - P2_DEV_SELECT_CC_START;
-                // send norns button evt
-                union event_data *ev = event_data_new(EVENT_KEY);
-                ev->enc.n = button + 1;
-                ev->enc.delta = (data > 0);
-                // perr("norns button %d %d\n", ev->enc.n, ev->enc.delta);
-                event_post(ev);
+        if ( (cc >= P2_ENCODER_CC_START  && cc <= P2_ENCODER_CC_END)
+                || cc == P2_ENCODER_CC_VOLUME || cc == P2_ENCODER_CC_SWING || cc == P2_ENCODER_CC_TEMPO) {
+
+            // encoders, send encoder event
+            int8_t enc =  cc == P2_ENCODER_CC_SWING ? 9
+                          : cc == P2_ENCODER_CC_TEMPO ? 10
+                          : cc - P2_ENCODER_CC_START;
+
+            if (push2->device_mode_ == P2DM_NORNS && enc > 2) {
                 return;
             }
-        } else if (cc >= P2_ENCODER_CC_START  && cc <= P2_ENCODER_CC_END) {
-            if (cc <= P2_ENCODER_CC_START + 2) {
-                // send norns encoder evt
-                int8_t enc = cc - P2_ENCODER_CC_START;
 
-                int v = data > 0x40 ? -1 : 1;
-                // int v = data > 0x40 ? (0x80 - data) * -1 : data;
-                // perr("norns encoder %d %04x %d\n", enc, data, v);
+            int v = data > 0x40 ? -1 : 1;
+            // int v = data > 0x40 ? (0x80 - data) * -1 : data;
+            // perr("norns encoder %d %04x %d\n", enc, data, v);
 
-                struct timespec now;
-                clock_gettime(CLOCK_MONOTONIC, &now); // get initial time-stamp
+            struct timespec now;
+            clock_gettime(CLOCK_MONOTONIC, &now); // get initial time-stamp
 
-                double diffns = (double)(now.tv_sec - encoderthin[enc].tv_sec) * 1.0e9 +
-                                (double)(now.tv_nsec - encoderthin[enc].tv_nsec);
+            double diffns = (double)(now.tv_sec - push2->encoderthin_[enc].tv_sec) * 1.0e9 +
+                            (double)(now.tv_nsec - push2->encoderthin_[enc].tv_nsec);
 
-                if (diffns > 1000000) {
-                    encoderthin[enc] = now;
-                    union event_data *ev = event_data_new(EVENT_ENC);
-                    ev->enc.n = enc + 1;
-                    ev->enc.delta = v;
-                    // perr("norns encoder %d %d\n", ev->enc.n, ev->enc.delta);
-                    event_post(ev);
-                    return;
-                }
+            if (diffns > 1000000) {
+                push2->encoderthin_[enc] = now;
+                union event_data *ev = event_data_new(EVENT_ENC);
+                ev->enc.n = enc + 1;
+                ev->enc.delta = v;
+                // perr("norns encoder %d %d\n", ev->enc.n, ev->enc.delta);
+                event_post(ev);
             }
+            return;
         } else {
+
+            // convention :
+            // return if event handled , or should not be handled
+            // break, to pass thru to be sent
             switch (cc) {
             case P2_CURSOR_LEFT_CC : {
-                if (data && push2->pad_mode_ == P2PM_GRID)  {
-                    dev_push2_event_send(self, P2_OP_CURSOR_LEFT);
+                if (push2->pad_mode_ == P2PM_GRID)  {
+                    if (data) dev_push2_event_send(self, P2_OP_CURSOR_LEFT);
+                    return;
                 }
                 break;
             }
             case P2_CURSOR_RIGHT_CC : {
-                if (data && push2->pad_mode_ == P2PM_GRID)  {
-                    dev_push2_event_send(self, P2_OP_CURSOR_RIGHT);
+                if (push2->pad_mode_ == P2PM_GRID)  {
+                    if (data) dev_push2_event_send(self, P2_OP_CURSOR_RIGHT);
+                    return;
                 }
                 break;
             }
             case P2_OCTAVE_DOWN_CC : {
-                if (data && push2->pad_mode_ == P2PM_NOTE) {
+                if (push2->pad_mode_ == P2PM_NOTE) {
+                    if (!data) return;
                     if (push2->midi_octave_ > 0) {
                         push2->midi_octave_--;
                         dev_push2_midi_send_cc(self, P2_OCTAVE_DOWN_CC,    (push2->pad_mode_ == P2PM_GRID  ? 0x00 : (push2->midi_octave_ > 0 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
                         dev_push2_midi_send_cc(self, P2_OCTAVE_UP_CC,      (push2->pad_mode_ == P2PM_GRID ? 0x00 : (push2->midi_octave_ < 7 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
                     }
+                    return;
                 }
                 break;
             }
             case P2_OCTAVE_UP_CC : {
-                if (data && push2->pad_mode_ == P2PM_NOTE) {
+                if (push2->pad_mode_ == P2PM_NOTE) {
+                    if (!data) return;
                     if (push2->midi_octave_ < 7) {
                         push2->midi_octave_++;
                         dev_push2_midi_send_cc(self, P2_OCTAVE_DOWN_CC,    (push2->pad_mode_ == P2PM_GRID ? 0x00 : (push2->midi_octave_ > 0 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
                         dev_push2_midi_send_cc(self, P2_OCTAVE_UP_CC,      (push2->pad_mode_ == P2PM_GRID ? 0x00 : (push2->midi_octave_ < 7 ? P2_CLR_W_ON : P2_CLR_W_AVAIL)));
                     }
+                    return;
                 }
                 break;
             }
-            case P2_LAYOUT_CC : {
+            case P2_NOTE_CC : {
+                if (data) dev_push2_event_send(self, P2_OP_PAD_MODE);
+                return;
+            }
+            case  P2_USER_CC : {
                 if (data) {
-                    dev_push2_event_send(self, P2_OP_LAYOUT);
+                    //toggle norns/native mode
+                    push2->device_mode_ = (push2->device_mode_  == P2DM_NORNS ? P2DM_NATIVE : P2DM_NORNS);
+                    dev_push2_midi_send_cc(self, P2_USER_CC,  push2->device_mode_ == P2DM_NORNS ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
+                    dev_push2_midi_send_cc(self, P2_SETUP_CC, push2->device_mode_ == P2DM_NORNS ? 0 : P2_CLR_W_AVAIL);
+                    for (int i = P2_DEV_SELECT_CC_START; i <= P2_DEV_SELECT_CC_END; i++) {
+                        dev_push2_midi_send_cc(self, i, (i > P2_DEV_SELECT_CC_START + 2 || push2->device_mode_ == P2DM_NATIVE )
+                                               ? 0 : P2_CLR_W_AVAIL);
+                    }
                 }
-                break;
+                return;
             }
+            case P2_SETUP_CC : {
+                // toogle patch/menu - via norns key 1.
+                union event_data *ev = event_data_new(EVENT_KEY);
+                ev->key.n = 1;
+                ev->key.val = (data > 0);
+                // perr("norns button, via setup %d %d\n", ev->key.n, ev->key.val);
+                event_post(ev);
+                return;
+            } // case
+            } // switch specific ccs
+
+            if (push2->device_mode_ == P2DM_NORNS ) {
+                // norns, use top 3 buttons as 3 buttons on norns hardware
+                if (cc >= P2_DEV_SELECT_CC_START  && cc <= P2_DEV_SELECT_CC_END) {
+                    int8_t button = cc - P2_DEV_SELECT_CC_START;
+
+                    if (button > 2)  return;
+
+                    // send norns button evt
+                    union event_data *ev = event_data_new(EVENT_KEY);
+                    ev->key.n = button + 1;
+                    ev->key.val = (data > 0);
+                    // perr("norns button %d %d\n", ev->key.n, ev->key.val);
+                    event_post(ev);
+                    return;
+                }
+            } else  { //P2DM_NATIVE
+                // key event, with key.n == cc value
+                union event_data *ev = event_data_new(EVENT_KEY);
+                ev->key.n = cc;
+                ev->key.val = (data > 0);
+                // perr("push button %d %d\n", ev->key.n, ev->key.val);
+                event_post(ev);
+                return;
             }
+        } // if/else encoder
+        break;
+    } //cc
+
+    default: {
+        if (push2->pad_mode_ == P2PM_NOTE ) {
+            event_post(evin);
         }
     }
-    default: {
-        ;
-    }
 
-    }
+    } // switch
 }
 
 void dev_push2_cursor_left(void *self) {
@@ -868,10 +910,10 @@ void dev_push2_cursor_right(void *self) {
 }
 
 
-void dev_push2_layout(void *self) {
+void dev_push2_pad_mode(void *self) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
     push2->pad_mode_ = ( push2->pad_mode_ == P2PM_GRID ? P2PM_NOTE : P2PM_GRID) ;
-    dev_push2_midi_send_cc(self, P2_LAYOUT_CC, push2->pad_mode_ == P2PM_NOTE ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
+    dev_push2_midi_send_cc(self, P2_NOTE_CC, push2->pad_mode_ == P2PM_NOTE ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
     if (push2->pad_mode_ == P2PM_NOTE) {
         dev_push2_midi_send_cc(self, P2_CURSOR_LEFT_CC, 0);
         dev_push2_midi_send_cc(self, P2_CURSOR_RIGHT_CC, 0);
@@ -1424,18 +1466,46 @@ int _push2d_update(lua_State *l) {
     }
 
     luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
-    struct dev_push2 *push2 = lua_touserdata(l, 1);
+    struct dev_push2 *dev = lua_touserdata(l, 1);
 
-    if (push2 == defaultPush2) {
-        defaultPush2->display_mode_ = P2DM_NATIVE;
-        dev_push2_midi_send_cc(push2, P2_USER_CC,  push2->display_mode_ == P2DM_NORNS ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
-        dev_push2_midi_send_cc(push2, P2_SETUP_CC, push2->display_mode_ == P2DM_NORNS ? 0 : P2_CLR_W_AVAIL);
+    if (dev == defaultPush2) {
+        if (defaultPush2->device_mode_ != P2DM_NATIVE) {
+            defaultPush2->device_mode_ = P2DM_NATIVE;
+            dev_push2_midi_send_cc(dev, P2_USER_CC,  dev->device_mode_ == P2DM_NORNS ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
+            dev_push2_midi_send_cc(dev, P2_SETUP_CC, dev->device_mode_ == P2DM_NORNS ? 0 : P2_CLR_W_AVAIL);
+        }
     }
 
-    cairo_paint(push2->pushDispl_[0]);
+    cairo_paint(dev->pushDispl_[0]);
     lua_settop(l, 0);
     return 0;
 }
+
+
+int _push2d_button_state(lua_State *l) {
+    if (lua_gettop(l) != 3) {
+        return luaL_error(l, "wrong number of arguments");
+    }
+
+    luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+    struct dev_push2 *dev = lua_touserdata(l, 1);
+
+    if (dev == defaultPush2) {
+        if (defaultPush2->device_mode_ != P2DM_NATIVE) {
+            defaultPush2->device_mode_ = P2DM_NATIVE;
+            dev_push2_midi_send_cc(dev, P2_USER_CC,  dev->device_mode_ == P2DM_NORNS ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
+            dev_push2_midi_send_cc(dev, P2_SETUP_CC, dev->device_mode_ == P2DM_NORNS ? 0 : P2_CLR_W_AVAIL);
+        }
+    }
+
+    int key = (int) luaL_checknumber(l, 2);
+    int colour = (int) luaL_checknumber(l, 3);
+    dev_push2_midi_send_cc(dev, key,  colour);
+    lua_settop(l, 0);
+
+    return 0;
+}
+
 
 // screen
 int _push2_screen_update(lua_State *l) {
@@ -1443,11 +1513,13 @@ int _push2_screen_update(lua_State *l) {
         return luaL_error(l, "wrong number of arguments");
     }
 
-    defaultPush2->display_mode_ = P2DM_NORNS ;
-    dev_push2_midi_send_cc(defaultPush2, P2_USER_CC,  defaultPush2->display_mode_ == P2DM_NORNS ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
-    dev_push2_midi_send_cc(defaultPush2, P2_SETUP_CC, defaultPush2->display_mode_ == P2DM_NORNS ? 0 : P2_CLR_W_AVAIL);
-    for (int i = P2_DEV_SELECT_CC_START; i <= P2_DEV_SELECT_CC_END; i++) {
-        dev_push2_midi_send_cc(defaultPush2, i, (i > P2_DEV_SELECT_CC_START + 2) ? 0 : P2_CLR_W_AVAIL);
+    if (defaultPush2->device_mode_ != P2DM_NORNS) {
+        defaultPush2->device_mode_ = P2DM_NORNS ;
+        dev_push2_midi_send_cc(defaultPush2, P2_USER_CC,  defaultPush2->device_mode_ == P2DM_NORNS ? P2_CLR_W_ON : P2_CLR_W_AVAIL);
+        dev_push2_midi_send_cc(defaultPush2, P2_SETUP_CC, defaultPush2->device_mode_ == P2DM_NORNS ? 0 : P2_CLR_W_AVAIL);
+        for (int i = P2_DEV_SELECT_CC_START; i <= P2_DEV_SELECT_CC_END; i++) {
+            dev_push2_midi_send_cc(defaultPush2, i, (i > P2_DEV_SELECT_CC_START + 2) ? 0 : P2_CLR_W_AVAIL);
+        }
     }
 
     screen_update();
@@ -1455,13 +1527,17 @@ int _push2_screen_update(lua_State *l) {
     return 0;
 }
 
+
+
 //=========================================================================================
 // Register lua
 void push2_register_lua(void *self) {
     struct dev_push2 *push2 = (struct dev_push2 *) self;
 
     lua_State* lvm = (lua_State*) luaState();
-    if (push2->display_mode_  == P2DM_NORNS ) {
+
+    // screen
+    if (push2->device_mode_  == P2DM_NORNS ) {
         lua_register(lvm, "s_update", &_push2_screen_update);
     }
 
@@ -1488,4 +1564,7 @@ void push2_register_lua(void *self) {
     lua_register(lvm, "p2_clear", &_push2d_clear);
     lua_register(lvm, "p2_close", &_push2d_close);
     lua_register(lvm, "p2_extents", &_push2d_extents);
+
+    // set buttons state
+    lua_register(lvm, "p2_button_state", &_push2d_button_state);
 }
