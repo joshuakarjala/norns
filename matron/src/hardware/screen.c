@@ -182,14 +182,6 @@ void screen_init(void) {
 
 }
 
-void screen_deinit(void) {
-    CHECK_CR
-    cairo_destroy(crmain);
-    cairo_surface_destroy(surface);
-    cairo_destroy(crfb);
-    cairo_surface_destroy(surfacefb);
-}
-
 void screen_context(void** pcr, void **pcrfb) {
     *pcr = cr;
     *pcrfb = crfb;
@@ -252,9 +244,28 @@ void screen_cr(void *newcr,void *newcrfb) {
     crfb = (cairo_t*) newcrfb;
 }
 
+
+void screen_deinit(void) {
+    CHECK_CR
+    cairo_destroy(crmain);
+    cairo_surface_destroy(surface);
+    cairo_destroy(crfb);
+    cairo_surface_destroy(surfacefb);
+}
+
 void screen_update(void) {
     CHECK_CR
     cairo_paint(crfb);
+}
+
+void screen_save(void) {
+    CHECK_CR
+    cairo_save(cr);
+}
+
+void screen_restore(void) {
+    CHECK_CR
+    cairo_restore(cr);
 }
 
 void screen_font_face(int i) {

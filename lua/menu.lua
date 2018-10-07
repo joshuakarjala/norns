@@ -30,7 +30,8 @@ local pWIFI = 8
 local pSYNC = 9
 local pUPDATE =10
 local pLOG = 12
-local pSLEEP = 13
+local pRESET = 13
+local pSLEEP = 14
 
 -- page pointer
 local m = {}
@@ -47,28 +48,28 @@ menu.scripterror = false
 menu.errormsg = ""
 
 -- mix paramset
-mix = paramset.new()
+mix = paramset.new("mix", "mix")
 cs.MAIN_LEVEL = cs.new(-math.huge,0,'db',0,0,"dB")
-mix:add_control("output",cs.MAIN_LEVEL)
+mix:add_control("output", "output", cs.MAIN_LEVEL)
 mix:set_action("output",
   function(x) norns.audio.output_level(x) end)
-mix:add_control("input",cs.MAIN_LEVEL)
+mix:add_control("input", "input", cs.MAIN_LEVEL)
 mix:set_action("input",
   function(x)
     norns.audio.input_level(1,x)
     norns.audio.input_level(2,x)
   end)
 cs.MUTE_LEVEL = cs.new(-math.huge,0,'db',0,-math.huge,"dB")
-mix:add_control("monitor",cs.MUTE_LEVEL)
+mix:add_control("monitor", "monitor", cs.MUTE_LEVEL)
 mix:set_action("monitor",
   function(x) norns.audio.monitor_level(x) end)
-mix:add_option("monitor mode",{"STEREO","MONO"})
-mix:set_action("monitor mode",
+mix:add_option("monitor_mode", "monitor mode", {"STEREO", "MONO"})
+mix:set_action("monitor_mode",
   function(x)
     if x == 1 then norns.audio.monitor_stereo()
     else norns.audio.monitor_mono() end
   end)
-mix:add_number("headphone",0, 63, 40)
+mix:add_number("headphone", "headphone", 0, 63, 40)
 mix:set_action("headphone",
   function(x) gain_hp(x) end)
 
@@ -77,8 +78,8 @@ mix:set_action("headphone",
 
 -- ControlSpec.new(minval, maxval, warp, step, default, units)
 mix:add_separator()
-mix:add_option("aux fx", {"OFF","ON"}, 2)
-mix:set_action("aux fx",
+mix:add_option("aux_fx", "aux fx", {"OFF", "ON"}, 2)
+mix:set_action("aux_fx",
   function(x)
     if x == 1 then
       fx.aux_fx_off()
@@ -89,77 +90,75 @@ mix:set_action("aux fx",
 cs.DB_LEVEL = cs.new(-math.huge,18,'db',0,0,"dB")
 cs.DB_LEVEL_MUTE = cs.new(-math.huge,18,'db',0,-math.huge,"dB")
 cs.DB_LEVEL_9DB = cs.new(-math.huge,18,'db',0,-9,"dB")
-mix:add_control("aux engine level", cs.DB_LEVEL_9DB)
-mix:set_action("aux engine level",
+mix:add_control("aux_engine_level", "aux engine level", cs.DB_LEVEL_9DB)
+mix:set_action("aux_engine_level",
   function(x) fx.aux_fx_output_level(x) end)
-mix:add_control("aux input1 level", cs.DB_LEVEL_MUTE)
-mix:set_action("aux input1 level",
+mix:add_control("aux_input1_level", "aux input1 level", cs.DB_LEVEL_MUTE)
+mix:set_action("aux_input1_level",
   function(x) fx.aux_fx_input_level(1,x) end)
-mix:add_control("aux input2 level", cs.DB_LEVEL_MUTE)
-mix:set_action("aux input2 level",
+mix:add_control("aux_input2_level", "aux input2 level", cs.DB_LEVEL_MUTE)
+mix:set_action("aux_input2_level",
   function(x) fx.aux_fx_input_level(2,x) end)
-mix:add_control("aux input1 pan", cs.PAN)
-mix:set_action("aux input1 pan",
+mix:add_control("aux_input1_pan", "aux input1 pan", cs.PAN)
+mix:set_action("aux_input1_pan",
   function(x) fx.aux_fx_input_pan(1,x) end)
-mix:add_control("aux input2 pan", cs.PAN)
-mix:set_action("aux input2 pan",
+mix:add_control("aux_input2_pan", "aux input2 pan", cs.PAN)
+mix:set_action("aux_input2_pan",
   function(x) fx.aux_fx_input_pan(2,x) end)
-mix:add_control("aux return level", cs.DB_LEVEL)
-mix:set_action("aux return level",
+mix:add_control("aux_return_level", "aux return level", cs.DB_LEVEL)
+mix:set_action("aux_return_level",
   function(x) fx.aux_fx_return_level(x) end)
 
 
 cs.IN_DELAY = cs.new(20,100,'lin',0,60,'ms')
-mix:add_control("rev pre delay", cs.IN_DELAY)
-mix:set_action("rev pre delay",
+mix:add_control("rev_pre_delay", "rev pre delay", cs.IN_DELAY)
+mix:set_action("rev_pre_delay",
   function(x) fx.aux_fx_param("in_delay",x) end)
 
 cs.LF_X = cs.new(50,1000,'exp',0,200,'hz')
-mix:add_control("rev lf x", cs.LF_X)
-mix:set_action("rev lf x",
+mix:add_control("rev_lf_x", "rev lf x", cs.LF_X)
+mix:set_action("rev_lf_x",
   function(x) fx.aux_fx_param("lf_x",x) end)
 
 cs.RT60 = cs.new(0.1,8,'lin',0,6,'s')
-mix:add_control("rev low time", cs.RT60)
-mix:set_action("rev low time",
+mix:add_control("rev_low_time", "rev low time", cs.RT60)
+mix:set_action("rev_low_time",
   function(x) fx.aux_fx_param("low_rt60",x) end)
-mix:add_control("rev mid time", cs.RT60)
-mix:set_action("rev mid time",
+mix:add_control("rev_mid_time", "rev mid time", cs.RT60)
+mix:set_action("rev_mid_time",
   function(x) fx.aux_fx_param("mid_rt60",x) end)
 
 cs.HF_DAMP = cs.new(1500,20000,'exp',0,6000,'hz')
-mix:add_control("rev hf damping", cs.HF_DAMP)
-mix:set_action("rev hf damping",
+mix:add_control("rev_hf_damping", "rev hf damping", cs.HF_DAMP)
+mix:set_action("rev_hf_damping",
   function(x) fx.aux_fx_param("hf_damping",x) end)
 
---[[
 cs.EQ_FREQ1 = cs.new(40,2500,'exp',0,315,'hz')
-mix:add_control("rev eq1 freq", cs.EQ_FREQ1)
-mix:set_action("rev eq1 freq",
+mix:add_control("rev_eq1_freq","rev eq1 freq", cs.EQ_FREQ1)
+mix:set_action("rev_eq1_freq",
   function(x) fx.aux_fx_param("eq1_freq",x) end)
 cs.EQ_LVL = cs.new(-15,15,'lin',0,0,"dB")
-mix:add_control("rev eq1 level", cs.EQ_LVL)
-mix:set_action("rev eq1 level",
+mix:add_control("rev_eq1_level","rev eq1 level", cs.EQ_LVL)
+mix:set_action("rev_eq1_level",
   function(x) fx.aux_fx_param("eq1_level",x) end)
 
 cs.EQ_FREQ2 = cs.new(160,10000,'exp',0,1500,'hz')
-mix:add_control("rev eq2 freq", cs.EQ_FREQ2)
-mix:set_action("rev eq2 freq",
+mix:add_control("rev_eq2_freq","rev eq2 freq", cs.EQ_FREQ2)
+mix:set_action("rev_eq2_freq",
   function(x) fx.aux_fx_param("eq2_freq",x) end)
-mix:add_control("rev eq2 level", cs.EQ_LVL)
-mix:set_action("rev eq2 level",
+mix:add_control("rev_eq2_level","rev eq2 level", cs.EQ_LVL)
+mix:set_action("rev_eq2_level",
   function(x) fx.aux_fx_param("eq2_level",x) end)
---]]
 
---cs.LEVEL = cs.new(-70,40,'lin',0,0,'dB')
---mix:add_control("rev_level", cs.LEVEL)
---mix:set_action("rev_level",
-  --function(x) fx.aux_fx_param("level",x) end)
+cs.LEVEL = cs.new(-70,40,'lin',0,0,'dB')
+mix:add_control("rev_level","rev level", cs.LEVEL)
+mix:set_action("rev_level",
+  function(x) fx.aux_fx_param("level",x) end)
 
 
 mix:add_separator()
-mix:add_option("insert fx", {"OFF","ON"})
-mix:set_action("insert fx",
+mix:add_option("insert_fx", "insert fx", {"OFF", "ON"})
+mix:set_action("insert_fx",
   function(x)
     if x == 1 then
       fx.insert_fx_off()
@@ -168,32 +167,32 @@ mix:set_action("insert fx",
     end
   end)
 cs.MIX = cs.new(0,1,'lin',0,1,'')
-mix:add_control("insert mix", cs.MIX)
-mix:set_action("insert mix",
+mix:add_control("insert_mix", "insert mix", cs.MIX)
+mix:set_action("insert_mix",
   function(x) fx.insert_fx_mix(x) end)
 
 cs.RATIO = cs.new(1,20,'lin',0,4,'')
-mix:add_control("comp ratio", cs.RATIO)
-mix:set_action("comp ratio",
+mix:add_control("comp_ratio", "comp ratio", cs.RATIO)
+mix:set_action("comp_ratio",
   function(x) fx.insert_fx_param("level",x) end)
 
 cs.THRESH = cs.new(-100,10,'db',0,-18,'dB')
-mix:add_control("comp threshold", cs.THRESH)
-mix:set_action("comp threshold",
+mix:add_control("comp_threshold", "comp threshold", cs.THRESH)
+mix:set_action("comp_threshold",
   function(x) fx.insert_fx_param("threshold",x) end)
 
 cs.ATTACK = cs.new(1,1000,'exp',0,5,'ms')
-mix:add_control("comp attack", cs.ATTACK)
-mix:set_action("comp attack",
+mix:add_control("comp_attack", "comp attack", cs.ATTACK)
+mix:set_action("comp_attack",
   function(x) fx.insert_fx_param("attack",x) end)
 cs.RELEASE = cs.new(1,1000,'exp',0,50,'ms')
-mix:add_control("comp release", cs.RELEASE)
-mix:set_action("comp release",
+mix:add_control("comp_release", "comp release", cs.RELEASE)
+mix:set_action("comp_release",
   function(x) fx.insert_fx_param("release",x) end)
 
 cs.MAKEUP = cs.new(-20,60,'db',0,9,'dB')
-mix:add_control("comp makeup gain", cs.MAKEUP)
-mix:set_action("comp makeup gain",
+mix:add_control("comp_makeup_gain", "comp makeup gain", cs.MAKEUP)
+mix:set_action("comp_makeup_gain",
   function(x) fx.insert_fx_param("makeup_gain",x) end)
 
 
@@ -214,9 +213,6 @@ local u = metro[30]
 
 -- assigns key/enc/screen handlers after user script has loaded
 norns.menu = {}
-norns.menu.init = function()
-  menu.set_mode(menu.mode)
-end
 norns.menu.status = function() return menu.mode end
 norns.menu.set = function(new_enc, new_key, new_redraw)
   menu.penc = new_enc
@@ -289,6 +285,7 @@ end
 -- menu set mode
 menu.set_mode = function(mode)
   if mode == false then
+    if menu.mode == true then s_restore() end
     menu.mode = false
     m.deinit[menu.page]()
     redraw = norns.script.redraw
@@ -298,6 +295,7 @@ menu.set_mode = function(mode)
     norns.encoders.set_sens(0,1)
     redraw()
   else -- enable menu mode
+    if menu.mode == false then s_save() end
     menu.mode = true
     menu.alt = false
     redraw = norns.none
@@ -615,7 +613,7 @@ m.redraw[pHOME] = function()
   screen.level(15)
   local line = string.upper(norns.state.name)
   --if(menu.scripterror and state.script ~= '') then
-  if(menu.scripterror) then
+  if(menu.scripterror and menu.errormsg ~= 'NO SCRIPT') then
     line = line .. " (error: " .. menu.errormsg .. ")"
   end
   screen.text(line)
@@ -828,6 +826,9 @@ m.key[pPARAMS] = function(n,z)
     if not m.params.midimap then
       if params:t(m.params.pos+1) == params.tFILE then
         fileselect.enter(os.getenv("HOME").."/dust", m.params.newfile)
+      elseif params:t(m.params.pos+1) == params.tTRIGGER then
+        params:set(m.params.pos+1)
+        m.params.triggered[m.params.pos+1] = 2
       end
     else
       m.params.midilearn = not m.params.midilearn
@@ -904,7 +905,7 @@ m.redraw[pPARAMS] = function()
             screen.move(0,10*i)
             screen.text(params:get_name(param_index))
             if m.params.midimap then
-              if params:t(param_index) == params.tCONTROL then
+              if params:t(param_index) == params.tCONTROL or params:t(param_index) == params.tTAPER then
                 screen.move(127,10*i)
                 if m.params.map[param_index] >= 0 then
                   screen.text_right(m.params.map[param_index])
@@ -914,7 +915,14 @@ m.redraw[pPARAMS] = function()
               end
             else
               screen.move(127,10*i)
-              screen.text_right(params:string(param_index))
+              if params:t(param_index) ==  params.tTRIGGER then
+                if m.params.triggered[param_index] and m.params.triggered[param_index] > 0 then
+                  screen.rect(124, 10 * i - 4, 3, 3)
+                  screen.fill()
+                end
+              else
+                screen.text_right(params:string(param_index))
+              end
             end
           end
         end
@@ -975,8 +983,12 @@ m.init[pPARAMS] = function()
   m.params.midilearn = false
   m.params.action_text = ""
   m.params.action = 0
+  m.params.triggered = {}
   u.callback = function()
     if m.params.action > 0 then m.params.action = m.params.action - 1 end
+    for k, v in pairs(m.params.triggered) do
+      if v > 0 then m.params.triggered[k] = v - 1 end
+    end
     menu.redraw()
   end
   u.time = 0.2
@@ -995,7 +1007,7 @@ end
 norns.menu_midi_event = function(data)
   if data[1] == 176 then -- cc
     if m.params.midilearn then
-      if params:t(m.params.pos+1) == params.tCONTROL then
+      if params:t(m.params.pos+1) == params.tCONTROL or params:t(m.params.pos+1) == params.tTAPER then
         m.params.map[m.params.pos+1] = data[2]
         menu.redraw()
       end
@@ -1062,8 +1074,8 @@ end
 -- SYSTEM
 m.sys = {}
 m.sys.pos = 1
-m.sys.list = {"AUDIO > ", "DEVICES > ", "WIFI >", "SYNC >", "UPDATE >", "LOG >"}
-m.sys.pages = {pAUDIO, pDEVICES, pWIFI, pSYNC, pUPDATE, pLOG}
+m.sys.list = {"AUDIO > ", "DEVICES > ", "WIFI >", "SYNC >", "UPDATE >", "RESET AUDIO"}
+m.sys.pages = {pAUDIO, pDEVICES, pWIFI, pSYNC, pUPDATE, pRESET}
 m.sys.input = 0
 m.sys.disk = ""
 
@@ -1250,6 +1262,7 @@ m.wifi.list = {"off","hotspot","network >"}
 m.wifi.len = 3
 m.wifi.selected = 1
 m.wifi.try = ""
+m.wifi.countdown = -1
 
 m.key[pWIFI] = function(n,z)
   if n==2 and z==1 then
@@ -1271,7 +1284,9 @@ end
 m.wifi.passdone = function(txt)
   if txt ~= nil then
     os.execute("~/norns/wifi.sh select \""..m.wifi.try.."\" \""..txt.."\" &")
+    os.execute("sudo systemctl stop norns-crone.service")
     wifi.on()
+    m.wifi.countdown = 4
   end
   menu.redraw()
 end
@@ -1291,44 +1306,53 @@ end
 m.redraw[pWIFI] = function()
   screen.clear()
   screen.level(15)
-  screen.move(0,10)
-  if wifi.state == 2 then
-    screen.text("status: router "..wifi.ssid)
-  else screen.text("status: "..wifi.status) end
-  if wifi.state > 0 then
-    screen.level(4)
-    screen.move(0,20)
-    screen.text(wifi.ip)
+
+  if m.wifi.countdown == -1 then
+    screen.move(0,10)
     if wifi.state == 2 then
-      screen.move(127,20)
-      screen.text_right(wifi.signal .. "dBm")
-    end
-  end
-
-  screen.move(0,40+wifi.state*10)
-  screen.text("-")
-
-  for i=1,m.wifi.len do
-    screen.move(8,30+10*i)
-    line = m.wifi.list[i]
-    if(i==m.wifi.pos+1) then
-      screen.level(15)
-    else
+      screen.text("status: router "..wifi.ssid)
+    else screen.text("status: "..wifi.status) end
+    if wifi.state > 0 then
       screen.level(4)
+      screen.move(0,20)
+      screen.text(wifi.ip)
+      if wifi.state == 2 then
+        screen.move(127,20)
+        screen.text_right(wifi.signal .. "dBm")
+      end
     end
-    screen.text(string.upper(line))
+
+    screen.move(0,40+wifi.state*10)
+    screen.text("-")
+
+    for i=1,m.wifi.len do
+      screen.move(8,30+10*i)
+      line = m.wifi.list[i]
+      if(i==m.wifi.pos+1) then
+        screen.level(15)
+      else
+        screen.level(4)
+      end
+      screen.text(string.upper(line))
+    end
+
+    screen.move(127,60)
+    if m.wifi.pos==2 then screen.level(15) else screen.level(4) end
+    if wifi.scan_count > 0 then
+      screen.text_right(wifi.scan_list[m.wifi.selected])
+    else screen.text_right("NONE") end
+
+  else -- countdown
+    screen.move(64,40)
+    screen.text_center("disabling audio")
+    screen.move(64,50)
+    screen.text_center("reset in system menu")
   end
-
-  screen.move(127,60)
-  if m.wifi.pos==2 then screen.level(15) else screen.level(4) end
-  if wifi.scan_count > 0 then
-    screen.text_right(wifi.scan_list[m.wifi.selected])
-  else screen.text_right("NONE") end
-
   screen.update()
 end
 
 m.init[pWIFI] = function()
+  m.wifi.countdown = -1
   wifi.scan()
   wifi.update()
   --m.wifi.selected = wifi.scan_active
@@ -1336,8 +1360,16 @@ m.init[pWIFI] = function()
   u.time = 1
   u.count = -1
   u.callback = function()
-    wifi.update()
-    menu.redraw()
+    if m.wifi.countdown > 0 then m.wifi.countdown = m.wifi.countdown - 1
+    elseif m.wifi.countdown == 0 then
+      print("wifi timeout")
+      m.wifi.countdown = -1
+      norns.startup_status.timeout()
+      menu.redraw()
+    else
+      wifi.update()
+      menu.redraw()
+    end
   end
   u:start()
 end
@@ -1577,6 +1609,44 @@ m.init[pLOG] = function()
 end
 
 m.deinit[pLOG] = function()
+  u:stop()
+end
+
+
+-----------------------------------------
+-- RESET
+m.reset = {}
+m.reset.countdown = 0
+
+m.key[pRESET] = function(n,z) end
+
+m.enc[pRESET] = function(n,delta) end
+
+m.redraw[pRESET] = function()
+  screen.clear()
+  screen.level(10)
+  screen.move(64,40)
+  screen.text_center("resetting audio")
+  screen.update()
+end
+
+m.init[pRESET] = function()
+  m.reset.countdown = 9
+  norns.script.clear()
+  os.execute("sudo systemctl restart norns-crone.service")
+  u.time = 1
+  u.count = -1
+  u.callback = function()
+    m.reset.countdown = m.reset.countdown - 1
+    if m.reset.countdown == 0 then
+      menu.set_page(pSYSTEM)
+      norns.startup_status.ok()
+    end
+  end
+  u:start()
+end
+
+m.deinit[pRESET] = function()
   u:stop()
 end
 

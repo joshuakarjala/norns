@@ -99,16 +99,17 @@ function Midi.connect(n)
     send = function(data) Midi.vport[n].send(data) end,
     disconnect = function(self)
         self.send = function() print("not connected") end
-        table.remove(Midi.vport[self.port].callbacks, self.index)
+        Midi.vport[self.port].callbacks[self.index] = nil
         self.index = nil
         self.port = nil
       end,
     reconnect = function(self, p)
+        p = p or 1
         if self.index then
-          table.remove(Midi.vport[self.port].callbacks, self.index)
+          Midi.vport[self.port].callbacks[self.index] = nil
         end
         self.send = function(data) Midi.vport[p].send(data) end
-        attached = function() return Midi.vport[p].attached end
+        self.attached = function() return Midi.vport[p].attached end
         Midi.vport[p].index = Midi.vport[p].index + 1
         self.index = Midi.vport[p].index
         self.port = p
@@ -131,8 +132,11 @@ function Midi.connect(n)
   d.pitchbend = function(val, ch)
       d.send{type="pitchbend", val=val, ch=ch or 1}
     end
-  d.aftertouch = function(note, val, ch)
-      d.send{type="aftertouch", note=note, val=val, ch=ch or 1}
+  d.key_pressure = function(note, val, ch)
+      d.send{type="key_pressure", note=note, val=val, ch=ch or 1}
+    end
+  d.channel_pressure = function(val, ch)
+      d.send{type="channel_pressure", val=val, ch=ch or 1}
     end
   return d
 end
@@ -162,8 +166,11 @@ local to_data = {
   pitchbend = function(msg)
       return {0xe0 + (msg.ch or 1) - 1, msg.val & 0x7f, (msg.val >> 7) & 0x7f}
     end,
-  aftertouch = function(msg)
+  key_pressure = function(msg)
       return {0xa0 + (msg.ch or 1) - 1, msg.note, msg.val}
+    end,
+  channel_pressure = function(msg)
+      return {0xd0 + (msg.ch or 1) - 1, msg.val}
     end
 }
 
@@ -209,13 +216,20 @@ function Midi.to_msg(data)
       val = data[2] + (data[3] << 7),
       ch = data[1] - 0xe0 + 1
     }
-  -- aftertouch
+  -- key pressure
   elseif data[1] & 0xf0 == 0xa0 then
     msg = {
-      type = "aftertouch",
+      type = "key_pressure",
       note = data[2],
       val = data[3],
       ch = data[1] - 0xa0 + 1
+    }
+  -- channel pressure
+  elseif data[1] & 0xf0 == 0xd0 then
+    msg = {
+      type = "channel_pressure",
+      val = data[2],
+      ch = data[1] - 0xd0 + 1
     }
   -- everything else
   else

@@ -1458,6 +1458,32 @@ int _push2d_extents(lua_State *l) {
     return 2;
 }
 
+int _push2d_save(lua_State *l) {
+  if (lua_gettop(l) != 1) {
+    return luaL_error(l, "wrong number of arguments");
+  }
+
+  luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+  struct dev_push2 *dev = lua_touserdata(l, 1);  
+  cairo_save(dev->pushDispl_[1]);
+
+  lua_settop(l, 0);
+  return 0;
+}
+
+int _push2d_restore(lua_State *l) {
+  if (lua_gettop(l) != 1) {
+    return luaL_error(l, "wrong number of arguments");
+  }
+
+  luaL_checktype(l, 1, LUA_TLIGHTUSERDATA);
+  struct dev_push2 *dev = lua_touserdata(l, 1);  
+  cairo_restore(dev->pushDispl_[1]);
+
+  lua_settop(l, 0);
+  return 0;
+}
+
 
 
 int _push2d_update(lua_State *l) {
@@ -1480,7 +1506,6 @@ int _push2d_update(lua_State *l) {
     lua_settop(l, 0);
     return 0;
 }
-
 
 int _push2d_button_state(lua_State *l) {
     if (lua_gettop(l) != 3) {
@@ -1542,6 +1567,8 @@ void push2_register_lua(void *self) {
     }
 
     lua_register(lvm, "p2_update", &_push2d_update);
+    lua_register(lvm, "p2_save", &_push2d_save);
+    lua_register(lvm, "p2_restore", &_push2d_restore);
     lua_register(lvm, "p2_font_face", &_push2d_font_face);
     lua_register(lvm, "p2_font_size", &_push2d_font_size);
     lua_register(lvm, "p2_aa", &_push2d_aa);

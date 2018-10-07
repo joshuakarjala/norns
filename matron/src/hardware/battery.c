@@ -19,7 +19,7 @@
 #define BATTERY_POLL_INTERVAL 5
 
 static int fd[3];
-static char buf[7];
+static char buf[8];
 static pthread_t p;
 
 void *battery_check(void *);
@@ -79,7 +79,7 @@ void *battery_check(void *x) {
         }
 
         lseek(fd[2], 0, SEEK_SET);
-        if (read(fd[2], &buf, 7) > 0) {
+        if (read(fd[2], &buf, 8) > 0) {
             n = atoi(buf) / 1000;
         } else {
             //fprintf(stderr, "failed to read battery current\n");

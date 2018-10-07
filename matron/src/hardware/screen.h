@@ -9,6 +9,8 @@ extern void screen_context(void** cr, void **crfb);
 extern void screen_cr(void *cr,void *crfb);
 
 extern void screen_update(void);
+extern void screen_save(void);
+extern void screen_restore(void);
 extern void screen_font_face(int i);
 extern void screen_font_size(double z);
 extern void screen_aa(int s);

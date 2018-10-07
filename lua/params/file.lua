@@ -1,14 +1,15 @@
 --- File class
--- @module number
+-- @module file
 
 local File = {}
 File.__index = File
 
 local tFILE = 4
 
-function File.new(name, path)
+function File.new(id, name, path)
   local o = setmetatable({}, File)
   o.t = tFILE
+  o.id = id
   o.name = name
   o.path = path or '-'
   o.action = function() end

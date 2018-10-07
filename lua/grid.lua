@@ -19,6 +19,8 @@ for i=1,4 do
     led = function() end,
     all = function() end,
     refresh = function() end,
+    cols = 0,
+    rows = 0,
     attached = false
   }
 end
@@ -35,7 +37,7 @@ function Grid.new(id, serial, name, dev)
   g.serial = serial
   name = name .. " " .. serial
   --while tab.contains(Grid.list,name) do
-    --name = name .. "+"
+  --  name = name .. "+"
   --end
   g.name = name
   g.dev = dev -- opaque pointer
@@ -47,7 +49,9 @@ function Grid.new(id, serial, name, dev)
 
   -- autofill next postiion
   local connected = {}
-  for i=1,4 do table.insert(connected, Grid.vport[i].name) end
+  for i=1,4 do
+    table.insert(connected, Grid.vport[i].name)
+  end
   if not tab.contains(connected, name) then
     for i=1,4 do
       if Grid.vport[i].name == "none" then
@@ -112,6 +116,8 @@ function Grid.connect(n)
   local d = {
     index = Grid.vport[n].index,
     port = n,
+    cols = function() return Grid.vport[n].cols end,
+    rows = function() return Grid.vport[n].rows end,
     event = function(x,y,z)
         print("grid input")
       end,
@@ -120,21 +126,28 @@ function Grid.connect(n)
     all = function(val) Grid.vport[n].all(val) end,
     refresh = function() Grid.vport[n].refresh() end,
     disconnect = function(self)
-        self.send = function() print("not connected") end
-        table.remove(Grid.vport[self.port].callbacks, self.index)
+        self.led = function() end
+        self.all = function() end
+        self.refresh = function() print("refresh: grid not connected") end
+        Grid.vport[self.port].callbacks[self.index] = nil
         self.index = nil
         self.port = nil
       end,
     reconnect = function(self, p)
+        p = p or 1
         if self.index then
-          table.remove(Grid.vport[self.port].callbacks, self.index)
+          Grid.vport[self.port].callbacks[self.index] = nil
         end
-        self.send = function(data) Grid.vport[p].send(data) end
-        attached = function() return Grid.vport[p].attached end
+        self.attached = function() return Grid.vport[p].attached end
+        self.led = function(x,y,z) Grid.vport[p].led(x,y,z) end
+        self.all = function(val) Grid.vport[p].all(val) end
+        self.refresh = function() Grid.vport[p].refresh() end
         Grid.vport[p].index = Grid.vport[p].index + 1
         self.index = Grid.vport[p].index
         self.port = p
-        Grid.vport[p].callbacks[self.index] = function(data) self.event(data) end
+        self.cols = function() return Grid.vport[p].cols end
+        self.rows = function() return Grid.vport[p].rows end
+        Grid.vport[p].callbacks[self.index] = function(x,y,z) self.event(x,y,z) end
       end
   }
 
@@ -164,8 +177,12 @@ function Grid.update_devices()
     Grid.vport[i].led = function(x, y, val) end
     Grid.vport[i].all = function(val) end
     Grid.vport[i].refresh = function() end
+    Grid.vport[i].cols = 0
+    Grid.vport[i].rows = 0
     for _,device in pairs(Grid.devices) do
       if device.name == Grid.vport[i].name then
+        Grid.vport[i].cols = device.cols
+        Grid.vport[i].rows = device.rows
         Grid.vport[i].led = function(x, y, val) device:led(x, y, val) end
         Grid.vport[i].all = function(val) device:all(val) end
         Grid.vport[i].refresh = function() device:refresh() end

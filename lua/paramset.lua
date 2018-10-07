@@ -7,6 +7,7 @@ local option = require 'params/option'
 local control = require 'params/control'
 local file = require 'params/file'
 local taper = require 'params/taper'
+local trigger = require 'params/trigger'
 
 local ParamSet = {
   tSEPARATOR = 0,
@@ -15,18 +16,22 @@ local ParamSet = {
   tCONTROL = 3,
   tFILE = 4,
   tTAPER = 5,
+  tTRIGGER = 6,
+  sets = {}
 }
 
 ParamSet.__index = ParamSet
 
 --- constructor
 -- @param name
-function ParamSet.new(name)
+function ParamSet.new(id, name)
   local ps = setmetatable({}, ParamSet)
+  ps.id = id or ""
   ps.name = name or ""
   ps.params = {}
   ps.count = 0
   ps.lookup = {}
+  ParamSet.sets[ps.id] = ps
   return ps
 end
 
@@ -37,39 +42,79 @@ function ParamSet:add_separator()
 end
 
 --- add generic parameter
+-- helper function to add param to paramset
+-- two uses:
+-- - pass "param" table with optional "action" function
+-- - pass keyed table to generate "param" table. required keys are "type" and "id"
 function ParamSet:add(args)
-  local param = args.param -- param is mandatory
+  local param = args.param
+  if param == nil then
+    if args.type == nil then
+      print("paramset.add() error: type required")
+      return nil
+    elseif args.id == nil then
+      print("paramset.add() error: id required")
+      return nil
+    end
+
+    local id = args.id
+    local name = args.name or id
+
+    if args.type == "number"  then
+      param = number.new(id, name, args.min, args.max, args.default)
+    elseif args.type == "option" then
+      param = option.new(id, name, args.options, args.default)
+    elseif args.type == "control" then
+      param = control.new(id, name, args.controlspec, args.formatter)
+    elseif args.type == "file" then
+      param = file.new(id, name, args.path)
+    elseif args.type == "taper" then
+      param = taper.new(id, name, args.min, args.max, args.default, args.k, args.units)
+    elseif args.type == "trigger" then
+      param = trigger.new(id, name)
+    else
+      print("paramset.add() error: unknown type")
+      return nil
+    end
+  end
+
   table.insert(self.params, param)
   self.count = self.count + 1
-  self.lookup[param.name] = self.count
-  if args.action then -- action is optional
+  self.lookup[param.id] = self.count
+  if args.action then
     param.action = args.action
   end
 end
 
 --- add number
-function ParamSet:add_number(name, min, max, default)
-  self:add { param=number.new(name, min, max, default) }
+function ParamSet:add_number(id, name, min, max, default)
+  self:add { param=number.new(id, name, min, max, default) }
 end
 
 --- add option
-function ParamSet:add_option(name, options, default)
-  self:add { param=option.new(name, options, default) }
+function ParamSet:add_option(id, name, options, default)
+  p = option.new(id, name, options, default)
+  self:add { param=option.new(id, name, options, default) }
 end
 
 --- add control
-function ParamSet:add_control(name, controlspec, formatter)
-  self:add { param=control.new(name, controlspec, formatter) }
+function ParamSet:add_control(id, name, controlspec, formatter)
+  self:add { param=control.new(id, name, controlspec, formatter) }
 end
 
 --- add file
-function ParamSet:add_file(name, path)
-  self:add { param=file.new(name, path) }
+function ParamSet:add_file(id, name, path)
+  self:add { param=file.new(id, name, path) }
 end
 
 --- add taper
-function ParamSet:add_taper(name, min, max, default, k, units)
-  self:add { param=taper.new(name, min, max, default, k, units) }
+function ParamSet:add_taper(id, name, min, max, default, k, units)
+  self:add { param=taper.new(id, name, min, max, default, k, units) }
+end
+
+--- add trigger
+function ParamSet:add_trigger(id, name)
+  self:add { param=trigger.new(id, name) }
 end
 
 --- print
@@ -87,44 +132,44 @@ end
 
 --- string
 function ParamSet:string(index)
-  if type(index) == "string" then index = self.lookup[index] end
-  return self.params[index]:string()
+  local param = self:lookup_param(index)
+  return param:string()
 end
 
 --- set
 function ParamSet:set(index, v)
-  if type(index) == "string" then index = self.lookup[index] end
-  self.params[index]:set(v)
+  local param = self:lookup_param(index)
+  return param:set(v)
 end
 
 --- set_raw (for control types only)
 function ParamSet:set_raw(index, v)
-  if type(index) == "string" then index = self.lookup[index] end
-  self.params[index]:set_raw(v)
+  local param = self:lookup_param(index)
+  param:set_raw(v)
 end
 
 --- get
 function ParamSet:get(index)
-  if type(index) == "string" then index = self.lookup[index] end
-  return self.params[index]:get()
+  local param = self:lookup_param(index)
+  return param:get()
 end
 
 --- get_raw (for control types only)
 function ParamSet:get_raw(index)
-  if type(index) == "string" then index = self.lookup[index] end
-  return self.params[index]:get_raw()
+  local param = self:lookup_param(index)
+  return param:get_raw()
 end
 
 --- delta
 function ParamSet:delta(index, d)
-  if type(index) == "string" then index = self.lookup[index] end
-  self.params[index]:delta(d)
+  local param = self:lookup_param(index)
+  param:delta(d)
 end
 
 --- set action
 function ParamSet:set_action(index, func)
-  if type(index) == "string" then index = self.lookup[index] end
-  self.params[index].action = func
+  local param = self:lookup_param(index)
+  param.action = func
 end
 
 --- get type
@@ -138,6 +183,16 @@ end
 
 local function unquote(s)
   return s:gsub('^"', ''):gsub('"$', ''):gsub('\\"', '"')
+end
+
+function ParamSet:lookup_param(index)
+  if type(index) == "string" and self.lookup[index] then
+    return self.params[self.lookup[index]]
+  elseif self.params[index] then
+    return self.params[index]
+  else
+    error("invalid paramset index: "..index)
+  end
 end
 
 --- write to disk
@@ -158,8 +213,8 @@ function ParamSet:write(filename)
   local fd = io.open(data_dir..filename, "w+")
   io.output(fd)
   for k,param in pairs(self.params) do
-    if param.name then
-      io.write(string.format("%s: %s\n", quote(param.name), param:get()))
+    if param.id and param.t ~= self.tTRIGGER then
+      io.write(string.format("%s: %s\n", quote(param.id), param:get()))
     end
   end
   io.close(fd)
@@ -172,11 +227,11 @@ function ParamSet:read(filename)
   if fd then
     io.close(fd)
     for line in io.lines(data_dir..filename) do
-      local name, value = string.match(line, "(\".-\")%s*:%s*(.*)")
+      local id, value = string.match(line, "(\".-\")%s*:%s*(.*)")
 
-      if name and value then
-        name = unquote(name)
-        local index = self.lookup[name]
+      if id and value then
+        id = unquote(id)
+        local index = self.lookup[id]
 
         if index then
           if tonumber(value) ~= nil then
