@@ -34,7 +34,7 @@ CroneEffects {
 
 				Out.ar(out, FaustZitaRev.ar(In.ar(in1), In.ar(in2), in_delay, lf_x, low_rt60, mid_rt60, hf_damping, eq1_freq, eq1_level, eq2_freq, eq2_level, -1, level));
 
-//				Out.ar(out, FaustZitaVerbLight.ar(In.ar(in1), In.ar(in2), in_delay, lf_x, low_rt60, mid_rt60, hf_damping) * level);
+				//Out.ar(out, FaustZitaVerbLight.ar(In.ar(in1), In.ar(in2), in_delay, lf_x, low_rt60, mid_rt60, hf_damping) * level);
 			}).send(s);
 
 			s.sync;

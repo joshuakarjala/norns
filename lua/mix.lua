@@ -104,8 +104,7 @@ mix:add_control("rev_eq2_level","rev eq2 level", cs_EQ_LVL)
 mix:set_action("rev_eq2_level",
   function(x) fx.aux_fx_param("eq2_level",x) end)
 
-local cs_LEVEL = cs.new(-70,40,'lin',0,0,'dB')
-mix:add_control("rev_level","rev level", cs_LEVEL)
+mix:add_control("rev_level","rev level", cs_DB_LEVEL)
 mix:set_action("rev_level",
   function(x) fx.aux_fx_param("level",x) end)
 

@@ -47,6 +47,7 @@ menu.mode = false
 menu.page = pHOME
 menu.alt = false
 menu.scripterror = false
+menu.locked = true
 menu.errormsg = ""
 
 
@@ -84,6 +85,7 @@ norns.scripterror = function(msg)
   print("### SCRIPT ERROR: "..msg)
   menu.errormsg = msg
   menu.scripterror = true
+  menu.locked = true
   menu.set_page(pHOME)
   menu.set_mode(true)
 end
@@ -93,7 +95,13 @@ norns.init_done = function(status)
   if status == true then
     menu.scripterror = false
     m.params.pos = 0
-    menu.set_mode(false)
+    if norns.script.nointerface == true then
+      menu.locked = true
+      menu.set_page(pPARAMS)
+    else
+      menu.locked = false
+      menu.set_mode(false)
+    end
   end
   m.params.init_map()
   m.params.read(norns.state.folder_name..".pmap")
@@ -119,7 +127,7 @@ norns.key = function(n, z)
       t:start()
     elseif z == 0 and pending == true then
       menu.alt = false
-      if menu.mode == true and menu.scripterror == false then
+      if menu.mode == true and menu.locked == false then
         menu.set_mode(false)
       else menu.set_mode(true) end
       t:stop()
@@ -157,7 +165,6 @@ menu.set_mode = function(mode)
     screen.font_face(0)
     screen.font_size(8)
     screen.line_width(1)
-    menu.set_page(menu.page)
     norns.encoders.callback = menu.enc
     norns.encoders.set_accel(1,true)
     norns.encoders.set_sens(1,1)
@@ -165,6 +172,7 @@ menu.set_mode = function(mode)
     norns.encoders.set_sens(2,0.5)
     norns.encoders.set_accel(3,true)
     norns.encoders.set_sens(3,0.5)
+    menu.set_page(menu.page)
   end
 end
 
@@ -417,11 +425,13 @@ m.init[pMIX] = function()
   m.mix.out2 = 0
   norns.encoders.set_accel(2,true)
   norns.encoders.set_sens(2,1)
+  norns.encoders.set_sens(3,1)
 end
 
 m.deinit[pMIX] = function()
   norns.encoders.set_accel(2,false)
   norns.encoders.set_sens(2,0.5)
+  norns.encoders.set_sens(3,0.5)
   norns.vu = norns.none
 end
 
@@ -525,7 +535,7 @@ m.key[pSELECT] = function(n,z)
   -- back
   if n==2 and z==1 then
     if m.sel.depth > 0 then
-      print('back')
+      --print('back')
       m.sel.folders[m.sel.depth] = nil
       m.sel.depth = m.sel.depth - 1
       -- FIXME return to folder position
