@@ -22,6 +22,7 @@ poll = require 'core/poll'
 engine = tab.readonly{table = require 'core/engine', except = {'name'}}
 softcut = require 'core/softcut'
 wifi = require 'core/wifi'
+push2 = require 'core/push2'
 
 controlspec = require 'core/controlspec'
 paramset = require 'core/paramset'

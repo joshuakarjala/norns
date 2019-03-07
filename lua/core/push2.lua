@@ -1,7 +1,4 @@
 --- push2 devices
--- @module push2
--- @alias push2
-require 'norns'
 
 norns.version.push2 = '0.0.0'
 
