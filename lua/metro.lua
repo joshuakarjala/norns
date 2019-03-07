@@ -7,8 +7,8 @@ norns.version.metro = '0.0.3'
 local Metro = {}
 Metro.__index = Metro
 
-Metro.num_metros = 33
-Metro.num_script_metros = 30 -- 31-33 are reserved
+Metro.num_metros = 34
+Metro.num_script_metros = 30 -- 31-34 are reserved
 
 Metro.metros = {}
 Metro.available = {}
@@ -67,7 +67,7 @@ end
 
 --- reset to default state
 function Metro:init()
-    self.id = id
+    self.id = nil
     self.time = 1
     self.count = -1
     self.callback = nil
@@ -79,7 +79,6 @@ end
 -- @param count - (optional) number of ticks. infinite by default
 -- @param stage - (optional) initial stage number (1-based.) 1 by default
 function Metro:start(time, count, stage)
-    local vargs = {}
     if time then self.props.time = time end
     if count then self.props.count = count end
     if stage then self.init_stage = stage end

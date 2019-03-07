@@ -1,17 +1,22 @@
 -- STARTUP
 
+tab = require 'tabutil'
+util = require 'util'
+
 require 'math'
 math.randomseed(os.time()) -- more random
 
 -- globals
 screen = require 'screen'
+monome = require 'monome'
 grid = require 'grid'
+arc = require 'arc'
 hid = require 'hid'
 metro = require 'metro'
 midi = require 'midi'
 osc = require 'osc'
 poll = require 'poll'
-engine = require 'engine'
+engine = tab.readonly{table = require 'engine', except = {'name'}}
 wifi = require 'wifi'
 push2 = require 'push2'
 
@@ -23,8 +28,6 @@ paramset = require 'paramset'
 
 params = paramset.new()
 
-tab = require 'tabutil'
-util = require 'util'
 
 -- load menu
 require 'menu'

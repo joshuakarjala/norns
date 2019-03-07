@@ -21,6 +21,12 @@ Script.clear = function()
     dev.key = norns.none
   end
   grid.cleanup()
+   -- clear, redirect, and reset arcs
+  for _, dev in pairs(arc.devices) do
+    dev:all(0)
+    dev:refresh()
+  end
+  arc.cleanup()
   --g = nil
   -- reset gridkey callback
   --gridkey = norns.none
@@ -54,6 +60,8 @@ Script.clear = function()
   screen.font_face(0)
   screen.font_size(8)
   if status == true then s_save() end
+  -- ensure finalizers run before next script
+  collectgarbage()
 end
 
 Script.init = function()
@@ -63,6 +71,7 @@ Script.init = function()
   s_save()
   grid.reconnect()
   midi.reconnect()
+  arc.reconnect()
 end
 
 --- load a script from the /scripts folder
