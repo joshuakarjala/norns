@@ -181,6 +181,7 @@ void screen_display_png(const char *filename, double x, double y){
 	cairo_surface_destroy (image);
 }
 
+extern void screen_cr(void *newcr,void *newcrfb);
 
 void screen_init(void) {
     surfacefb = cairo_linuxfb_surface_create();
