@@ -1,6 +1,7 @@
 // the Crone, a singleton class
 // it receives OSC from *matron* and manages the current CroneEngine
 Crone {
+	classvar <>bootOnInit = true;
 	// the audio server
 	classvar <>server;
 	// current CroneEngine subclass instance
@@ -41,7 +42,9 @@ Crone {
 			"SC_JACK_DEFAULT_INPUTS".setenv("");
 			"SC_JACK_DEFAULT_OUTPUTS".setenv("");
 
-			Crone.startBoot;
+			if (Crone.bootOnInit) {
+				Crone.startBoot;
+			}
 		}
 	}
 
@@ -123,6 +126,10 @@ Crone {
 					this.reportPolls;
 				});
 			}
+		}, {
+		   postln("warning: didn't find engine: " ++ name.asString);
+		   this.reportCommands;
+		   this.reportPolls;
 		});
 	}
 

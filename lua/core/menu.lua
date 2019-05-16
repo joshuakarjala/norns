@@ -34,6 +34,7 @@ local pRESET = 9
 local pSLEEP = 10
 local pTAPE = 11
 local pMIX = 12
+local pUPDATE = 13
 
 -- page pointer
 local m = {}
@@ -55,7 +56,7 @@ menu.shownav = false
 menu.showstats = false
 
 
----- METROS
+-- METROS
 local pending = false
 -- metro for key hold detection
 local metro = require 'core/metro'
@@ -107,21 +108,15 @@ end
 
 norns.init_done = function(status)
   menu.set_page(pHOME)
+  menu.panel = 3
   if status == true then
     menu.scripterror = false
     m.params.pos = 0
-    if norns.script.nointerface == true then
-      --menu.locked = true
-      --menu.set_page(pPARAMS)
-      menu.locked = false
-      menu.set_mode(false)
-    else
-      menu.locked = false
-      menu.set_mode(false)
-    end
+    menu.locked = false
+    menu.set_mode(false)
   end
   m.params.init_map()
-  m.params.read_pmap(norns.state.shortname..".pmap")
+  m.params.read_pmap()
 end
 
 
@@ -229,10 +224,8 @@ end
 
 
 
--- --------------------------------------------------
 -- interfaces
 
------------------------------------------
 -- HOME
 
 m.home = {}
@@ -325,7 +318,6 @@ m.redraw[pHOME] = function()
 end
 
 
-----------------------------------------
 -- SELECT
 
 m.sel = {}
@@ -341,7 +333,7 @@ local function build_select_tree(root,dir)
 
   for _,v in pairs(c) do
     --print("---- " .. v)
-    if v == "data/" or v == "audio/" or v == 'lib/' then
+    if v == "data/" or v == "audio/" or v == 'lib/' or v == "docs" then
       --print(".")
     elseif string.find(v,'/') then
       build_select_tree(p,v)
@@ -354,7 +346,7 @@ local function build_select_tree(root,dir)
       else
         n = p
       end
-      n = string.gsub(n,script_dir,'')
+      n = string.gsub(n,_path.code,'')
       n = string.sub(n,0,-2)
       table.insert(m.sel.list,{name=n,file=file,path=p})
     end
@@ -363,7 +355,7 @@ end
 
 m.init[pSELECT] = function()
   m.sel.list = {}
-  build_select_tree(script_dir,"")
+  build_select_tree(_path.code,"")
   --for k,v in pairs(m.sel.list) do
     --print(k, v.name, v.file, v.path)
   --end
@@ -412,13 +404,13 @@ end
 
 
 
------------------------------------------
 -- PREVIEW
 
 m.pre = {}
 m.pre.meta = {}
 
 m.init[pPREVIEW] = function()
+  m.pre.wait = 0
   m.pre.meta = norns.script.metadata(m.sel.file)
   m.pre.len = tab.count(m.pre.meta)
   m.pre.state = 0
@@ -431,6 +423,8 @@ m.deinit[pPREVIEW] = norns.none
 
 m.key[pPREVIEW] = function(n,z)
   if n==3 and m.pre.state == 1 then
+    m.pre.wait = 1
+    menu.redraw()
     norns.script.load(m.sel.file)
   elseif n ==3 and z == 1 then
     m.pre.state = 1
@@ -449,18 +443,22 @@ end
 m.redraw[pPREVIEW] = function()
   screen.clear()
   screen.level(15)
-  local i
-  for i=1,8 do
-    if i <= m.pre.len then
-      screen.move(0,i*8-2)
-      screen.text(m.pre.meta[i+m.pre.pos])
+  if m.pre.wait == 0 then
+    local i
+    for i=1,8 do
+      if i <= m.pre.len then
+        screen.move(0,i*8-2)
+        screen.text(m.pre.meta[i+m.pre.pos])
+      end
     end
+  else
+    screen.move(64,32)
+    screen.text_center("loading...")
   end
   screen.update()
 end
 
 
------------------------------------------
 -- PARAMS
 
 m.params = {}
@@ -477,24 +475,16 @@ m.key[pPARAMS] = function(n,z)
   if menu.alt then
     if n==3 and z==1 then
       if m.params.altpos == 1 and m.params.loadable==true then
-        if m.params.n == 0 then
-          params:read(norns.state.shortname..".pset")
-        else
-          params:read(norns.state.shortname.."-"..string.format("%02d",m.params.n)..".pset")
-        end
+        params:read(m.params.n)
         m.params.action = 15
         m.params.action_text = "loaded"
       elseif m.params.altpos == 2 then
-        if m.params.n == 0 then
-          params:write(norns.state.shortname..".pset")
-        else
-          params:write(norns.state.shortname.."-"..string.format("%02d",m.params.n)..".pset")
-        end
+        params:write(m.params.n)
         m.params.action = 15
         m.params.action_text = "saved"
         m.params.loadable = true
         -- save mapping
-        m.params.write_pmap(norns.state.shortname..".pmap")
+        m.params.write_pmap()
       end
       menu.redraw()
     end
@@ -503,9 +493,10 @@ m.key[pPARAMS] = function(n,z)
     --menu.set_page(pHOME)
   elseif n==3 and z==1 then
     if not m.params.midimap then
+      m.params.fine = true
       if params.count > 0 then
         if params:t(m.params.pos+1) == params.tFILE then
-          fileselect.enter(dust_dir, m.params.newfile)
+          fileselect.enter(_path.dust, m.params.newfile)
         elseif params:t(m.params.pos+1) == params.tTRIGGER then
           params:set(m.params.pos+1)
           m.params.triggered[m.params.pos+1] = 2
@@ -514,6 +505,8 @@ m.key[pPARAMS] = function(n,z)
     else
       m.params.midilearn = not m.params.midilearn
     end
+  elseif n==3 and z==0 then
+    m.params.fine = false
   end
 end
 
@@ -560,7 +553,8 @@ m.enc[pPARAMS] = function(n,d)
     if m.params.pos ~= prev then menu.redraw() end
   elseif n==3 and params.count > 0 then
     if not m.params.midimap then
-      params:delta(m.params.pos+1,d)
+      local dx = m.params.fine and (d/20) or d
+      params:delta(m.params.pos+1,dx)
       menu.redraw()
     else
       m.params.map[m.params.pos+1] = util.clamp(m.params.map[m.params.pos+1]+d,-1,127)
@@ -663,6 +657,7 @@ m.redraw[pPARAMS] = function()
 end
 
 m.init[pPARAMS] = function()
+  m.params.fine = false
   m.params.midimap = false
   m.params.midilearn = false
   m.params.action_text = ""
@@ -703,22 +698,13 @@ norns.menu_midi_event = function(data)
   end
 end
 
-function m.params.write_pmap(filename)
+function m.params.write_pmap()
   local function quote(s)
     return '"'..s:gsub('"', '\\"')..'"'
   end
-  local dir = norns.state.data
-  local fd = io.open(dir,"r")
-  if fd then
-    io.close(fd)
-  else
-    print(">> creating subfolder")
-    util.make_dir(dir)
-  end
-
-  -- write file
-  print(">> saving PMAP "..dir..filename)
-  local fd = io.open(dir..filename, "w+")
+  local filename = norns.state.data..norns.state.shortname..".pmap"
+  print(">> saving PMAP "..filename)
+  local fd = io.open(filename, "w+")
   io.output(fd)
   for k,v in pairs(m.params.map) do
     io.write(string.format("%s: %d\n", quote(tostring(k)), v))
@@ -726,17 +712,16 @@ function m.params.write_pmap(filename)
   io.close(fd)
 end
 
-function m.params.read_pmap(filename)
+function m.params.read_pmap()
   local function unquote(s)
     return s:gsub('^"', ''):gsub('"$', ''):gsub('\\"', '"')
   end
-  local dir = norns.state.data
-  local file = dir .. filename
-  print(">> reading PMAP "..file)
-  local fd = io.open(file, "r")
+  local filename = norns.state.data..norns.state.shortname..".pmap"
+  print(">> reading PMAP "..filename)
+  local fd = io.open(filename, "r")
   if fd then
     io.close(fd)
-    for line in io.lines(file) do
+    for line in io.lines(filename) do
       --local name, value = string.match(line, "(\".-\")%s*:%s*(.*)")
       local name, value = string.match(line, "(\".-\")%s*:%s*(.*)")
 
@@ -752,12 +737,11 @@ end
 
 
 
------------------------------------------
 -- SYSTEM
 m.sys = {}
 m.sys.pos = 1
-m.sys.list = {"AUDIO > ", "DEVICES > ", "WIFI >", "RESET"}
-m.sys.pages = {pAUDIO, pDEVICES, pWIFI, pRESET}
+m.sys.list = {"AUDIO > ", "DEVICES > ", "WIFI >", "RESET", "UPDATE"}
+m.sys.pages = {pAUDIO, pDEVICES, pWIFI, pRESET, pUPDATE}
 m.sys.input = 0
 
 m.key[pSYSTEM] = function(n,z)
@@ -796,7 +780,6 @@ m.init[pSYSTEM] = norns.none
 m.deinit[pSYSTEM] = norns.none
 
 
------------------------------------------
 -- DEVICES
 m.devices = {}
 m.devices.pos = 1
@@ -889,6 +872,11 @@ end
 
 m.redraw[pDEVICES] = function()
   screen.clear()
+  if m.devices.mode == "list" then
+    screen.move(0,10)
+    screen.level(4)
+    screen.text(string.upper(m.devices.section))
+  end
   for i=1,m.devices.len do
     screen.move(0,10*i+20)
     if(i==m.devices.pos) then
@@ -899,14 +887,16 @@ m.redraw[pDEVICES] = function()
     if m.devices.mode == "type" then
       screen.text(string.upper(m.devices.list[i]) .. " >")
     elseif m.devices.mode == "list" then
+      screen.text(i..".")
+      screen.move(8,10*i+20)
       if m.devices.section == "midi" then
-        screen.text(i .. ". " .. midi.vports[i].name)
+        screen.text(midi.vports[i].name)
       elseif m.devices.section == "grid" then
-        screen.text(i .. ". " .. grid.vports[i].name)
+        screen.text(grid.vports[i].name)
       elseif m.devices.section == "arc" then
-        screen.text(i .. ". " .. arc.vports[i].name)
+        screen.text(arc.vports[i].name)
       elseif m.devices.section == "hid" then
-        screen.text(i .. ". " .. hid.vports[i].name)
+        screen.text(hid.vports[i].name)
       end
     elseif m.devices.mode == "select" then
       screen.text(m.devices.options[m.devices.section][i])
@@ -926,7 +916,6 @@ m.deinit[pDEVICES] = function() end
 
 
 
------------------------------------------
 -- WIFI
 m.wifi = {}
 m.wifi.pos = 0
@@ -980,10 +969,10 @@ m.key[pWIFI] = function(n,z)
       listselect.enter(wifi.conn_list, m.wifi.connect)
     elseif m.wifi.pos == 3 then
       wifi.update()
-      listselect.enter(m.wifi.ssid_list, m.wifi.add) 
+      listselect.enter(m.wifi.ssid_list, m.wifi.add)
     elseif m.wifi.pos == 4 then
       wifi.update()
-      listselect.enter(wifi.conn_list, m.wifi.del) 
+      listselect.enter(wifi.conn_list, m.wifi.del)
     end
   end
 end
@@ -1004,60 +993,44 @@ m.redraw[pWIFI] = function()
   screen.clear()
   screen.level(4)
 
-  if m.wifi.countdown == -1 then
-    screen.move(0,10)
-    screen.text("STATUS: " .. wifi.status)
-    screen.move(0,20)
-    screen.text("NETWORK: " .. wifi.connection_name)
-    screen.move(0,30)
-    screen.text("IP: " .. wifi.ip)
-    if wifi.ip and wifi.connection then
-      if wifi.connection:is_wireless() then
-        screen.move(0,40)
-        screen.text("SIGNAL: " .. wifi.signal .. "dBm")
-      end
+  screen.move(0,10)
+  screen.text("STATUS: " .. wifi.status)
+  screen.move(0,20)
+  screen.text("NETWORK: " .. wifi.connection_name)
+  screen.move(0,30)
+  screen.text("IP: " .. wifi.ip)
+  if wifi.ip and wifi.connection then
+    if wifi.connection:is_wireless() then
+      screen.move(0,40)
+      screen.text("SIGNAL: " .. wifi.signal .. "dBm")
     end
-
-    local xp = {0,20,58,94,114}
-    for i=1,m.wifi.len do
-      screen.move(xp[i],60)
-      line = m.wifi.list[i]
-      if(i==m.wifi.pos+1) then
-        screen.level(15)
-      else
-        screen.level(4)
-      end
-      screen.text(string.upper(line))
-    end
-
-  else -- countdown
-    screen.move(64,40)
-    screen.text_center("disabling audio")
-    screen.move(64,50)
-    screen.text_center("reset in system menu")
   end
+
+  local xp = {0,20,58,94,114}
+  for i=1,m.wifi.len do
+    screen.move(xp[i],60)
+    line = m.wifi.list[i]
+    if(i==m.wifi.pos+1) then
+      screen.level(15)
+    else
+      screen.level(4)
+    end
+    screen.text(string.upper(line))
+  end
+
   screen.update()
 end
 
 m.init[pWIFI] = function()
   wifi.ensure_radio_is_on()
   m.wifi.ssid_list = wifi.ssids() or {}
-  m.wifi.countdown = -1
   wifi.update()
   m.wifi.selected = 1
-  u.time = 1
+  u.time = 3
   u.count = -1
   u.event = function()
-    if m.wifi.countdown > 0 then m.wifi.countdown = m.wifi.countdown - 1
-    elseif m.wifi.countdown == 0 then
-      print("wifi timeout")
-      m.wifi.countdown = -1
-      norns.startup_status.timeout()
-      menu.redraw()
-    else
-      wifi.update()
-      menu.redraw()
-    end
+    wifi.update()
+    menu.redraw()
   end
   u:start()
 end
@@ -1066,7 +1039,6 @@ m.deinit[pWIFI] = function()
   u:stop()
 end
 
------------------------------------------
 -- AUDIO
 
 m.audio = {}
@@ -1077,7 +1049,7 @@ m.key[pAUDIO] = function(n,z)
     menu.set_page(pSYSTEM)
   elseif n==3 and z==1 then
     if mix:t(m.audio.pos+1) == mix.tFILE then
-      fileselect.enter(os.getenv("HOME").."/dust", m.audio.newfile)
+      fileselect.enter(_path.dust, m.audio.newfile)
     end
   end
 end
@@ -1134,7 +1106,6 @@ m.deinit[pAUDIO] = function()
 end
 
 
------------------------------------------
 -- RESET
 m.reset = {}
 m.reset.confirmed = false
@@ -1148,11 +1119,8 @@ elseif n==3 and z==1 then
     if m.tape.rec.sel == TAPE_REC_STOP then audio.tape_record_stop() end
     norns.state.clean_shutdown = true
     norns.state.save()
-    pcall(cleanup)
-
+    if pcall(cleanup) == false then print("cleanup failed") end
     os.execute("sudo systemctl restart norns-jack.service")
-    os.execute("sudo systemctl restart norns-crone.service")
-    os.execute("sudo systemctl restart norns-sclang.service")
     os.execute("sudo systemctl restart norns-matron.service")
   end
 end
@@ -1172,7 +1140,118 @@ m.init[pRESET] = function() end
 m.deinit[pRESET] = function() end
 
 
------------------------------------------
+-- UPDATE
+
+m.update = {}
+m.update.url = ''
+m.update.version = ''
+
+local function check_newest()
+  print("checking for update")
+  m.update.url = util.os_capture( [[curl -s \
+      https://api.github.com/repos/monome/norns/releases/latest \
+      | grep "browser_download_url.*" \
+      | cut -d : -f 2,3 \
+      | tr -d \"]])
+  print(m.update.url)
+  m.update.version = m.update.url:match("(%d%d%d%d%d%d)")
+  print("available version "..m.update.version)
+end
+
+local function get_update()
+  m.update.message = "preparing..."
+  menu.redraw()
+  pcall(cleanup) -- shut down script
+  norns.script.clear()
+  print("shutting down audio...")
+  os.execute("sudo systemctl stop norns-jack.service") -- disable audio
+  print("clearing old updates...")
+  os.execute("sudo rm -rf /home/we/update/*") -- clear old updates
+  m.update.message = "downloading..."
+  menu.redraw()
+  print("starting download...")
+  os.execute("wget -T 180 -q -P /home/we/update/ " .. m.update.url) --download
+  m.update.message = "unpacking update..."
+  menu.redraw()
+  print("checksum validation...")
+  m.update.message = "checksum validation..."
+  local checksum = util.os_capture("cd /home/we/update; sha256sum -c /home/we/update/*.sha256 | grep OK")
+  if checksum:match("OK") then
+    print("unpacking...")
+    os.execute("tar xzvf /home/we/update/*.tgz -C /home/we/update/")
+    m.update.message = "running update..."
+    menu.redraw()
+    print("running update...")
+    os.execute("/home/we/update/"..m.update.version.."/update.sh")
+    m.update.message = "complete."
+    menu.redraw()
+    print("update complete.")
+  else
+    print("update failed.")
+    m.update.message = "update failed."
+    menu.redraw()
+  end
+end
+
+m.key[pUPDATE] = function(n,z)
+  if m.update.stage=="init" and z==1 then
+    menu.set_page(pSYSTEM)
+    menu.redraw()
+  elseif m.update.stage=="confirm" then
+    if n==2 and z==1 then
+      menu.set_page(pSYSTEM)
+      menu.redraw()
+    elseif n==3 and z==1 then
+      m.update.stage="update"
+      get_update()
+      m.update.stage="done"
+    end
+  elseif m.update.stage=="done" and z==1 then
+    print("shutting down.")
+    m.update.message = "shutting down."
+    menu.redraw()
+    os.execute("sleep 0.5; sudo shutdown now")
+  end
+end
+
+
+m.enc[pUPDATE] = function(n,delta) end
+
+m.redraw[pUPDATE] = function()
+  screen.clear()
+  screen.level(15)
+  screen.move(64,40)
+  if m.update.stage == "init" then
+    screen.text_center(m.update.message)
+  elseif m.update.stage == "confirm" then
+    screen.text_center("update found: "..m.update.version)
+    screen.move(64,50)
+    screen.text_center("install?")
+  elseif m.update.stage == "update" then
+    screen.text_center(m.update.message)
+  end
+  screen.update()
+end
+
+m.init[pUPDATE] = function()
+  m.update.stage = "init"
+
+  local ping = util.os_capture("ping -c 1 github.com | grep failure")
+  if ping == '' then check_newest() end
+
+  if not ping == ''  then
+    m.update.message = "need internet."
+  elseif tonumber(norns.version.update) >= tonumber(m.update.version) then
+    m.update.message = "up to date."
+  elseif norns.disk < 400 then
+    m.update.message = "disk full. need 400M."
+  else
+    m.update.stage = "confirm"
+  end
+end
+
+m.deinit[pUPDATE] = function() end
+
 
 -- SLEEP
 
@@ -1186,11 +1265,10 @@ m.key[pSLEEP] = function(n,z)
     menu.redraw()
     norns.state.clean_shutdown = true
     norns.state.save()
-    cleanup()
+    pcall(cleanup)
     if m.tape.rec.sel == TAPE_REC_STOP then audio.tape_record_stop() end
     audio.level_dac(0)
     audio.headphone_gain(0)
-    wifi.off()
     os.execute("sleep 0.5; sudo shutdown now")
   end
 end
@@ -1215,7 +1293,6 @@ m.init[pSLEEP] = norns.none
 m.deinit[pSLEEP] = norns.none
 
 
------------------------------------------
 -- MIX
 
 m.mix = {}
@@ -1231,7 +1308,7 @@ end
 
 m.enc[pMIX] = function(n,d)
   local ch1 = {"output", "monitor", "softcut"}
-  local ch2 = {"input", "ext", "tape"}
+  local ch2 = {"input", "engine", "tape"}
 
   if n==2 then
     mix:delta(ch1[m.mix.sel],d)
@@ -1282,7 +1359,7 @@ m.redraw[pMIX] = function()
   screen.stroke()
 
   screen.level(2)
-  n = mix:get_raw("ext")*48
+  n = mix:get_raw("engine")*48
   screen.rect(x+108.5,55.5,2,-n)
   screen.stroke()
 
@@ -1305,7 +1382,7 @@ m.redraw[pMIX] = function()
   screen.move(46,63)
   screen.text("mon")
   screen.move(68,63)
-  screen.text("ext")
+  screen.text("eng")
   screen.level(m.mix.sel==3 and 15 or 1)
   screen.move(90,63)
   screen.text("cut")
@@ -1342,7 +1419,6 @@ m.mix.vu = function(in1,in2,out1,out2)
 end
 
 
------------------------------------------
 -- TAPE
 
 local TAPE_MODE_PLAY = 1
@@ -1400,7 +1476,7 @@ m.key[pTAPE] = function(n,z)
             tape_play_counter.time = 0.25
             tape_play_counter.event = function()
               m.tape.play.pos_tick = m.tape.play.pos_tick + 0.25
-              if m.tape.play.pos_tick > m.tape.play.length 
+              if m.tape.play.pos_tick > m.tape.play.length
                   and m.tape.play.status == TAPE_PLAY_PLAY then
                 print("tape is over!")
                 audio.tape_play_stop()
@@ -1418,7 +1494,7 @@ m.key[pTAPE] = function(n,z)
           end
           menu.redraw()
         end
-        fileselect.enter(dust_dir, playfile_callback)
+        fileselect.enter(_path.audio, playfile_callback)
       elseif m.tape.play.sel == TAPE_PLAY_PLAY then
         tape_play_counter:start()
         audio.tape_play_start()
@@ -1436,8 +1512,8 @@ m.key[pTAPE] = function(n,z)
     else -- REC CONTROLS
       if m.tape.rec.sel == TAPE_REC_ARM then
         tape_diskfree()
-        m.tape.rec.file = string.format("%04d",norns.state.tape) .. ".aiff"
-        audio.tape_record_open(audio_dir.."/tape/"..m.tape.rec.file)
+        m.tape.rec.file = string.format("%04d",norns.state.tape) .. ".wav"
+        audio.tape_record_open(_path.audio.."tape/"..m.tape.rec.file)
         m.tape.rec.sel = TAPE_REC_START
         m.tape.rec.pos_tick = 0
         tape_rec_counter.time = 0.25
@@ -1539,5 +1615,3 @@ m.init[pTAPE] = function()
   tape_diskfree()
 end
 m.deinit[pTAPE] = norns.none
-
-

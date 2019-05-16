@@ -282,6 +282,7 @@ void o_send_command(const char *name, lo_message msg) {
     path = malloc(len);
     sprintf(path, "/command/%s", name);
     lo_send_message(ext_addr, path, msg);
+    free(path);
 }
 
 void o_send(const char *name, lo_message msg) {
@@ -361,7 +362,7 @@ void o_set_engine_name(int idx, const char *name) {
                 "refusing to allocate engine name %d; already exists",
                 idx);
     } else {
-        len = strlen(name);
+        len = strlen(name) + 1; // include null terminator
         engine_names[idx] = malloc(len);
         if ( engine_names[idx] == NULL ) {
             fprintf(stderr,
@@ -369,7 +370,7 @@ void o_set_engine_name(int idx, const char *name) {
                     idx,
                     name);
         } else {
-            strncpy(engine_names[idx], name, len + 1);
+            strncpy(engine_names[idx], name, len);
         }
     }
     o_unlock_descriptors();
@@ -613,6 +614,14 @@ void o_cut_buffer_read_stereo(char *file, float start_src, float start_dst, floa
 	lo_send(crone_addr, "/softcut/buffer/read_stereo", "sfffii", file, start_src, start_dst, dur);
 } 
 
+void o_cut_buffer_write_mono(char *file, float start, float dur, int ch) {
+	lo_send(crone_addr, "/softcut/buffer/write_mono", "sffi", file, start, dur, ch);
+}
+
+void o_cut_buffer_write_stereo(char *file, float start, float dur) {
+	lo_send(crone_addr, "/softcut/buffer/write_stereo", "sff", file, start, dur);
+}
+
 
 
 
@@ -700,7 +709,7 @@ int handle_engine_report_start(const char *path,
                                void *user_data)
 {
     assert(argc > 0);
-    // arg 1: count of engines
+    // arg 1: count of engines    
     o_clear_engine_names();
     o_set_num_desc(&num_engines, argv[0]->i);
     return 0;

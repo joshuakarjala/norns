@@ -101,6 +101,8 @@ SC.rate_slew_time = function(voice,value) _norns.cut_param("rate_slew_time",voic
 
 --- set phase poll quantization
 SC.phase_quant = function(voice,value) _norns.cut_param("phase_quant",voice,value) end
+--- set phase poll offset
+SC.phase_offset = function(voice,value) _norns.cut_param("phase_offset",voice,value) end
 --- start phase poll
 SC.poll_start_phase = function() _norns.poll_start_cut_phase() end
 --- stop phase poll
@@ -133,6 +135,15 @@ SC.buffer_read_stereo = function(file, start_src, start_dst, dur)
   _norns.cut_buffer_read_stereo(file, start_src, start_dst, dur)
 end
 
+--- write file, mono
+SC.buffer_write_mono = function(file, start, dur, ch)
+  _norns.cut_buffer_write_mono(file, start, dur, ch)
+end
+--- write file, stereo
+SC.buffer_write_stereo = function(file, start, dur)
+  _norns.cut_buffer_write_stereo(file, start, dur)
+end
+
 --- set function for phase poll
 SC.event_phase = function(f) norns.softcut_phase = f end
 
@@ -142,10 +153,37 @@ SC.event_phase = function(f) norns.softcut_phase = f end
 
 --- reset softcut params
 function SC.reset()
+  SC.poll_stop_phase()
+  SC.event_phase(norns.none)
   for i=1,SC.VOICE_COUNT do
-    SC.level(i,0)
     SC.enable(i,0)
-    -- TODO: sensible defaults!
+    SC.play(i,0)
+    SC.buffer(i, (i%2)+1)
+    SC.level(i,0)
+    SC.pan(i,0.5)
+    SC.level_input_cut(1,i,0)
+    SC.level_input_cut(2,i,0)
+    SC.level_cut_cut(1,i,0)
+    SC.level_cut_cut(2,i,0)
+    SC.rate(i,1)
+    SC.loop_start(i,(i-1)*2)
+    SC.loop_end(i,(i-1)*2+1)
+    SC.loop(i,1)
+    SC.fade_time(i, 0.0005)
+    SC.rec_level(i,0)
+    SC.pre_level(i,0)
+    SC.rec(i,0)
+    SC.rec_offset(i,-0.00015)
+    SC.position(i,0)
+    SC.filter_dry(i,1)
+    SC.filter_lp(i,0)
+    SC.filter_hp(i,0)
+    SC.filter_bp(i,0)
+    SC.filter_br(i,0)
+    SC.level_slew_time(i,0.001)
+    SC.rate_slew_time(i,0.001)
+    SC.phase_quant(i,1)
+    SC.phase_offset(i,0)
   end
   SC.buffer_clear()
 end

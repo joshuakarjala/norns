@@ -14,6 +14,7 @@ grid = require 'core/grid'
 arc = require 'core/arc'
 hid = require 'core/hid'
 metro = require 'core/metro'
+clock = require "core/clock"
 midi = require 'core/midi'
 osc = require 'core/osc'
 poll = require 'core/poll'
@@ -34,7 +35,15 @@ require 'core/menu'
 
 -- global include function
 function include(file)
-  return dofile(norns.state.path .. "lib/" .. file)
+  local here = norns.state.path .. file .. '.lua'
+  local there = _path.code .. file .. '.lua'
+  if util.file_exists(here) then 
+    print("including "..here)
+    return dofile(here)
+  else
+    print("including "..there)
+    return dofile(there)
+  end
 end
 
 
@@ -42,10 +51,12 @@ end
 norns.startup_status.ok = function()
   print("norns.startup_status.ok")
   -- resume last loaded script
-  norns.script.clear()
   norns.state.resume()
   -- turn on VU
   _norns.poll_start_vu()
+  -- report engines
+  report_engines()
+  
 end
 
 norns.startup_status.timeout = function()

@@ -22,7 +22,7 @@ Audio.level_dac = function(level)
   _norns.level_dac(level)
 end
 
-Audio.level_ext = function(level)
+Audio.level_eng = function(level)
   _norns.level_ext(level)
 end
 
@@ -72,108 +72,123 @@ Audio.restart = function()
 end
 
 
--- CUT
 
-Audio.level_adc_cut = function(value)
-  _norns.level_adc_cut(value)
-end
+--- Effects functions
+-- @section Effects
 
-Audio.level_ext_cut = function(value)
-  _norns.level_ext_cut(value)
-end
-
-Audio.level_cut_rev = function(value)
-  _norns.level_cut_rev(value)
-end
-
-
-
-
-
-
--- EFFECTS
-
+--- reverb on.
 function Audio.rev_on()
    _norns.rev_on()
 end
 
+--- reverb off.
 function Audio.rev_off()
    _norns.rev_off()
 end
 
+--- reverb Monitor level.
+-- @param val
 function Audio.level_monitor_rev(val)
    _norns.level_monitor_rev(val)
 end
 
-function Audio.level_ext_rev(val)
+--- reverb ENGINE level.
+-- @param val
+function Audio.level_eng_rev(val)
    _norns.level_ext_rev(val)
 end
 
+--- reverb DAC level.
+-- @param val
 function Audio.level_rev_dac(val)
    _norns.level_rev_dac(val)
 end
 
+--- set reverb parameter.
+-- @param name
+-- @param val
 function Audio.rev_param(name, val)
    _norns.rev_param(name, val)
 end
 
+--- turn on compressor.
 function Audio.comp_on()
    _norns.comp_on()
 end
 
+--- turn off compressor.
 function Audio.comp_off()
    _norns.comp_off()
 end
 
+--- compressor mix amount.
+-- @param val
 function Audio.comp_mix(val)
    _norns.comp_mix(val)
 end
 
+--- set compressor parameter.
+-- @param name
+-- @param val
 function Audio.comp_param(name, val)
    _norns.comp_param(name, val)
 end
 
 
 
--- TAPE
+--- Tape Functions
+-- @section Tape
 
+--- open a tape file.
+-- @param file
 Audio.tape_play_open = function(file)
   _norns.tape_play_open(file)
 end
 
+--- start tape playing.
 Audio.tape_play_start = function()
   _norns.tape_play_start()
 end
 
+--- stop tape playing.
 Audio.tape_play_stop = function()
   _norns.tape_play_stop()
 end
 
+--- open a tape recording file.
+-- @param file
 Audio.tape_record_open = function(file)
   _norns.tape_record_open(file)
 end
 
+--- start tape recording.
 Audio.tape_record_start = function()
   _norns.tape_record_start()
 end
 
+--- stop tape recording.
 Audio.tape_record_stop = function()
   _norns.tape_record_stop()
 end
 
 
+--- Softcut levels
+-- @section softcut
 
--- CUT
-
--- levels
+--- softcut adc level.
+-- @param value
 Audio.level_adc_cut = function(value)
   _norns.level_adc_cut(value)
 end
 
-Audio.level_ext_cut = function(value)
+--- softcut eng level.
+-- @param value
+Audio.level_eng_cut = function(value)
   _norns.level_ext_cut(value)
 end
 
+--- softcut cut reverb level.
+-- @param value
 Audio.level_cut_rev = function(value)
   _norns.level_cut_rev(value)
 end
@@ -216,10 +231,12 @@ function Audio.adjust_output_level(delta)
   end
 end
 
+--- print audio file info 
+-- @param path (from dust directory)
 function Audio.file_info(path)
   -- dur, ch, rate
-  print("file_info: " .. dust_dir .. path)
-  return sound_file_inspect(dust_dir .. path)
+  print("file_info: " .. _path.dust .. path)
+  return sound_file_inspect(_path.dust .. path)
 end
 
 
