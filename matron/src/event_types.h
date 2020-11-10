@@ -1,8 +1,8 @@
 #pragma once
 
-#include <stdint.h>
 #include "oracle.h"
 #include "osc.h"
+#include <stdint.h>
 
 typedef enum {
     // unused (do not remove)
@@ -13,6 +13,10 @@ typedef enum {
     EVENT_METRO,
     // clock resume requested
     EVENT_CLOCK_RESUME,
+    // external clock sent start event
+    EVENT_CLOCK_START,
+    // external clock sent stop event
+    EVENT_CLOCK_STOP,
     // gpio event
     EVENT_KEY,
     // gpio event
@@ -76,7 +80,9 @@ typedef enum {
     // crow remove
     EVENT_CROW_REMOVE,
     // crow event
-    EVENT_CROW_EVENT
+    EVENT_CROW_EVENT,
+    // softcut buffer content callback
+    EVENT_SOFTCUT_RENDER,
 } event_t;
 
 // a packed data structure for four volume levels
@@ -186,6 +192,14 @@ struct event_clock_resume {
     uint32_t thread_id;
 };
 
+struct event_clock_start {
+    struct event_common common;
+};
+
+struct event_clock_stop {
+    struct event_common common;
+};
+
 struct event_key {
     struct event_common common;
     uint8_t n;
@@ -268,7 +282,7 @@ struct event_crow_remove {
 
 struct event_crow_event {
     struct event_common common;
-		void *dev;
+    void *dev;
     uint8_t id;
 }; // +4
 
@@ -277,6 +291,14 @@ struct event_system_cmd {
     char *capture;
 };
 
+struct event_softcut_render {
+    struct event_common common;
+    int idx;
+    float sec_per_sample;
+    float start;
+    size_t size;
+    float* data;
+};
 
 union event_data {
     uint32_t type;
@@ -311,4 +333,5 @@ union event_data {
     struct event_crow_remove crow_remove;
     struct event_crow_event crow_event;
     struct event_system_cmd system_cmd;
+    struct event_softcut_render softcut_render;
 };

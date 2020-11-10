@@ -3,24 +3,24 @@
  */
 
 #include <assert.h>
+#include <dirent.h>
 #include <errno.h>
+#include <fnmatch.h>
 #include <libudev.h>
 #include <locale.h>
 #include <poll.h>
 #include <pthread.h>
-#include <fnmatch.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <dirent.h>
 
 #include "device.h"
-#include "device_list.h"
-#include "device_hid.h"
-#include "device_monome.h"
 #include "device_crow.h"
+#include "device_hid.h"
+#include "device_list.h"
+#include "device_monome.h"
 #include "events.h"
 
 #define SUB_NAME_SIZE 32
@@ -41,37 +41,24 @@ struct watch {
 
 // watchers
 // FIXME: these names / paths are really arbitrary.
-static struct watch w[DEV_TYPE_COUNT] = {
-    {
-        .sub_name = "tty",
-        .node_pattern = "/dev/ttyUSB*"
-    },
-    {
-        .sub_name = "input",
-        .node_pattern = "/dev/input/event*"
-    },
-    {
-        .sub_name = "sound",
-        .node_pattern = "/dev/snd/midiC*D*"
-    },
-    {
-        .sub_name = "crow",
-        .node_pattern = "/dev/ttyACM*"
-    }
-};
+static struct watch w[DEV_TYPE_COUNT_PHYSICAL] = {
+    {.sub_name = "tty", .node_pattern = "/dev/ttyUSB*"},
+    {.sub_name = "input", .node_pattern = "/dev/input/event*"},
+    {.sub_name = "sound", .node_pattern = "/dev/snd/midiC*D*"},
+    {.sub_name = "crow", .node_pattern = "/dev/ttyACM*"}};
 
 // file descriptors to watch/poll
-struct pollfd pfds[DEV_TYPE_COUNT];
+struct pollfd pfds[DEV_TYPE_COUNT_PHYSICAL];
 // thread for polling all the watched file descriptors
 pthread_t watch_tid;
 
 //--------------------------------
 //--- static function declarations
-static void* watch_loop(void *data);
+static void *watch_loop(void *data);
 static void handle_device(struct udev_device *dev);
 static device_t check_dev_type(struct udev_device *dev);
-static const char* get_alsa_midi_node(struct udev_device *dev);
-static const char* get_device_name(struct udev_device *dev);
+static const char *get_alsa_midi_node(struct udev_device *dev);
+static const char *get_device_name(struct udev_device *dev);
 
 //--------------------------------
 //---- extern function definitions
@@ -84,29 +71,21 @@ void dev_monitor_init(void) {
     udev = udev_new();
     assert(udev);
 
-    for(int i = 0; i < DEV_TYPE_COUNT; i++) {
+    for (int i = 0; i < DEV_TYPE_COUNT_PHYSICAL; i++) {
         w[i].mon = udev_monitor_new_from_netlink(udev, "udev");
-        if(w[i].mon == NULL) {
-            fprintf(stderr,
-                "failed to start udev_monitor for subsystem %s, pattern %s\n",
-                w[i].sub_name,
-                w[i].node_pattern);
+        if (w[i].mon == NULL) {
+            fprintf(stderr, "failed to start udev_monitor for subsystem %s, pattern %s\n", w[i].sub_name,
+                    w[i].node_pattern);
             continue;
         }
-        if (udev_monitor_filter_add_match_subsystem_devtype(w[i].mon,
-                                                            w[i].sub_name,
-                                                            NULL) < 0) {
-            fprintf(stderr,
-                "failed to add udev monitor filter for subsystem %s, pattern %s\n",
-                w[i].sub_name,
-                w[i].node_pattern);
+        if (udev_monitor_filter_add_match_subsystem_devtype(w[i].mon, w[i].sub_name, NULL) < 0) {
+            fprintf(stderr, "failed to add udev monitor filter for subsystem %s, pattern %s\n", w[i].sub_name,
+                    w[i].node_pattern);
             continue;
         }
         if (udev_monitor_enable_receiving(w[i].mon) < 0) {
-            fprintf(stderr,
-                "failed to enable monitor receiving for for subsystem %s, pattern %s\n",
-                w[i].sub_name,
-                w[i].node_pattern);
+            fprintf(stderr, "failed to enable monitor receiving for for subsystem %s, pattern %s\n", w[i].sub_name,
+                    w[i].node_pattern);
             continue;
         }
 
@@ -115,15 +94,19 @@ void dev_monitor_init(void) {
     } // end dev type loop
 
     s = pthread_attr_init(&attr);
-    if (s) { fprintf(stderr, "error initializing thread attributes\n"); }
+    if (s) {
+        fprintf(stderr, "error initializing thread attributes\n");
+    }
     s = pthread_create(&watch_tid, &attr, watch_loop, NULL);
-    if (s) { fprintf(stderr, "error creating thread\n"); }
+    if (s) {
+        fprintf(stderr, "error creating thread\n");
+    }
     pthread_attr_destroy(&attr);
 }
 
 void dev_monitor_deinit(void) {
     pthread_cancel(watch_tid);
-    for (int i = 0; i < DEV_TYPE_COUNT; i++) {
+    for (int i = 0; i < DEV_TYPE_COUNT_PHYSICAL; i++) {
         free(w[i].mon);
     }
 }
@@ -138,7 +121,7 @@ int dev_monitor_scan(void) {
         return 1;
     }
 
-    for(int i = 0; i < DEV_TYPE_COUNT; i++) {
+    for (int i = 0; i < DEV_TYPE_COUNT_PHYSICAL; i++) {
         struct udev_enumerate *ue;
         struct udev_list_entry *devices, *dev_list_entry;
 
@@ -170,12 +153,12 @@ int dev_monitor_scan(void) {
 //-------------------------------
 //--- static function definitions
 
-void* watch_loop(void *p) {
-    (void) p;
+void *watch_loop(void *p) {
+    (void)p;
     struct udev_device *dev;
 
     while (1) {
-        if (poll(pfds, DEV_TYPE_COUNT, WATCH_TIMEOUT_MS) < 0) {
+        if (poll(pfds, DEV_TYPE_COUNT_PHYSICAL, WATCH_TIMEOUT_MS) < 0) {
             switch (errno) {
             case EINVAL:
                 perror("error in poll()");
@@ -187,7 +170,7 @@ void* watch_loop(void *p) {
         }
 
         // see which monitor has data
-        for (int i = 0; i < DEV_TYPE_COUNT; i++) {
+        for (int i = 0; i < DEV_TYPE_COUNT_PHYSICAL; i++) {
             if (pfds[i].revents & POLLIN) {
                 dev = udev_monitor_receive_device(w[i].mon);
                 if (dev) {
@@ -211,7 +194,7 @@ void handle_device(struct udev_device *dev) {
         if (node != NULL) {
             device_t t = check_dev_type(dev);
 
-            if (t >= 0 && t < DEV_TYPE_COUNT) {
+            if (t >= 0 && t < DEV_TYPE_COUNT_PHYSICAL) {
                 dev_list_add(t, node, get_device_name(dev));
             }
         }
@@ -221,7 +204,7 @@ void handle_device(struct udev_device *dev) {
             // try to act according to
             // https://github.com/systemd/systemd/blob/master/rules/78-sound-card.rules
             if (strcmp(action, "change") == 0) {
-                const char* alsa_node = get_alsa_midi_node(dev);
+                const char *alsa_node = get_alsa_midi_node(dev);
 
                 if (alsa_node != NULL) {
                     dev_list_add(DEV_TYPE_MIDI, alsa_node, get_device_name(dev));
@@ -234,7 +217,7 @@ void handle_device(struct udev_device *dev) {
         } else {
             device_t t = check_dev_type(dev);
 
-            if (t >= 0 && t < DEV_TYPE_COUNT) {
+            if (t >= 0 && t < DEV_TYPE_COUNT_PHYSICAL) {
                 if (strcmp(action, "add") == 0) {
                     dev_list_add(t, node, get_device_name(dev));
                 } else if (strcmp(action, "remove") == 0) {
@@ -253,8 +236,9 @@ device_t check_dev_type(struct udev_device *dev) {
         // for now, just get USB devices.
         // eventually we might want to use this same system for GPIO, &c...
         if (udev_device_get_parent_with_subsystem_devtype(dev, "usb", NULL)) {
-            for (int i = 0; i < DEV_TYPE_COUNT; i++) {
-                if (fnmatch(w[i].node_pattern, node, 0) == 0) {
+            for (int i = 0; i < DEV_TYPE_COUNT_PHYSICAL; i++) {
+                const char *node_pattern = w[i].node_pattern;
+                if (node_pattern[0] && fnmatch(node_pattern, node, 0) == 0) {
                     t = i;
                     break;
                 }
@@ -265,7 +249,7 @@ device_t check_dev_type(struct udev_device *dev) {
 }
 
 // try to get midi device node from udev_device
-const char* get_alsa_midi_node(struct udev_device *dev) {
+const char *get_alsa_midi_node(struct udev_device *dev) {
     const char *subsys;
     const char *syspath;
     DIR *sysdir;
@@ -293,12 +277,12 @@ const char* get_alsa_midi_node(struct udev_device *dev) {
 }
 
 // try to get product name from udev_device or its parents
-const char* get_device_name(struct udev_device *dev) {
+const char *get_device_name(struct udev_device *dev) {
     char *current_name = NULL;
     struct udev_device *current_dev = dev;
 
     while (current_name == NULL) {
-        current_name = (char *) udev_device_get_sysattr_value(current_dev, "product");
+        current_name = (char *)udev_device_get_sysattr_value(current_dev, "product");
         current_dev = udev_device_get_parent(current_dev);
 
         if (current_dev == NULL) {

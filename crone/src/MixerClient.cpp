@@ -19,7 +19,7 @@ void MixerClient::process(jack_nframes_t numFrames) {
 
     // copy inputs
     bus.adc_source.setFrom(source[SourceAdc], numFrames, smoothLevels.adc);
-    bus.cut_source.setFrom(source[SourceCut], numFrames);
+    bus.cut_source.setFrom(source[SourceCut], numFrames, smoothLevels.cut);
     bus.ext_source.setFrom(source[SourceExt], numFrames, smoothLevels.ext);
 
     // mix ADC monitor
@@ -56,13 +56,15 @@ void MixerClient::process(jack_nframes_t numFrames) {
 
     // process tape record
     if (tape.isWriting()) {
-        // FIXME: another stupid pointer array.
         const float *src[2] = {(const float *) bus.dac_sink.buf[0], (const float *) bus.dac_sink.buf[1]};
         tape.writer.process(src, numFrames);
     }
 
-    // update VU
-    vuLevels.update(bus.adc_source, bus.dac_sink, numFrames);
+    // update peak meters
+    inPeak[0].update(bus.adc_source.buf[0], numFrames);
+    inPeak[1].update(bus.adc_source.buf[1], numFrames);
+    outPeak[0].update(sink[SinkId::SinkDac][0], numFrames);
+    outPeak[1].update(sink[SinkId::SinkDac][1] , numFrames);
 }
 
 void MixerClient::setSampleRate(jack_nframes_t sr) {
@@ -71,7 +73,6 @@ void MixerClient::setSampleRate(jack_nframes_t sr) {
     reverb.init(sr);
     setFxDefaults();
 }
-
 
 void MixerClient::processFx(size_t numFrames) {
     // FIXME: current faust architecture needs stupid pointer arrays.
@@ -96,7 +97,7 @@ void MixerClient::processFx(size_t numFrames) {
 
     // mix to insert bus
     bus.ins_in.mixFrom(bus.adc_monitor, numFrames, smoothLevels.monitor);
-    bus.ins_in.mixFrom(bus.cut_source, numFrames, smoothLevels.cut);
+    bus.ins_in.addFrom(bus.cut_source, numFrames);
     bus.ins_in.addFrom(bus.ext_source, numFrames);
 
     bus.dac_sink.clear(numFrames);
@@ -261,23 +262,4 @@ void MixerClient::setFxDefaults() {
   reverb.getUi().setParamValue(ReverbParam::LOW_RT60, 4.7);
   reverb.getUi().setParamValue(ReverbParam::MID_RT60, 2.3);
   reverb.getUi().setParamValue(ReverbParam::HF_DAMP, 6666);
-}
-
-void MixerClient::VuLevels::clear() {
-    for(int i=0; i<2; ++i) {
-        absPeakIn[i] = 0.f;
-        absPeakOut[i] = 0.f;
-    }
-}
-
-void MixerClient::VuLevels::update(MixerClient::StereoBus &in, MixerClient::StereoBus &out, size_t numFrames) {
-    float f;
-    for (size_t fr=0; fr<numFrames; ++fr) {
-        for(int ch=0; ch<2; ++ch) {
-            f = fabsf(in.buf[ch][fr]);
-            if (f > absPeakIn[ch]) { absPeakIn[ch] = f; }
-            f = fabsf(out.buf[ch][fr]);
-            if (f > absPeakOut[ch]) { absPeakOut[ch] = f; }
-        }
-    }
 }

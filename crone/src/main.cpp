@@ -8,8 +8,9 @@
 #include <memory>
 
 #include "MixerClient.h"
-#include "SoftCutClient.h"
+#include "SoftcutClient.h"
 #include "OscInterface.h"
+#include "BufDiskWorker.h"
 
 static inline void sleep(int ms) {
     std::this_thread::sleep_for(std::chrono::milliseconds(ms));
@@ -22,8 +23,10 @@ int main() {
 
 #if 1
     std::unique_ptr<MixerClient> m = std::make_unique<MixerClient>();
-    std::unique_ptr<SoftCutClient> sc = std::make_unique<SoftCutClient>();
+    std::unique_ptr<SoftcutClient> sc = std::make_unique<SoftcutClient>();
 
+    cout << "initializing buffer management worker.." << endl;
+    BufDiskWorker::init(48000);
 
     cout << "setting up jack clients.." << endl;
     m->setup();
@@ -37,7 +40,7 @@ int main() {
     cout << "connecting ports... " << endl;
     m->connectAdcPorts();
     m->connectDacPorts();
-    m->connect<2, 2>(sc.get(), MixerClient::SinkCut, SoftCutClient::SourceAdc);
+    m->connect<2, 2>(sc.get(), MixerClient::SinkCut, SoftcutClient::SourceAdc);
     sc->connect<6, 6>(m.get(), 0, MixerClient::SourceCut);
 
     cout << "starting OSC interface..." << endl;
@@ -58,8 +61,8 @@ int main() {
     OscInterface::deinit();
     cout << "goodbye" << endl;
 #else
-    std::unique_ptr<SoftCutClient> sc;
-    sc = std::make_unique<SoftCutClient>();
+    std::unique_ptr<SoftcutClient> sc;
+    sc = std::make_unique<SoftcutClient>();
 
     sc->setup();
     sc->start();

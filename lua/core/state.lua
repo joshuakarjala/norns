@@ -1,14 +1,33 @@
 -- State
--- @module state
+-- @classmod state
 
 local state = {}
-state.tape = 0
 state.script = ''
 state.path = _path.code
+state.lib = _path.code
 state.data = _path.data
 state.name = ''
 state.shortname = ''
 state.clean_shutdown = false
+state.mix = {}
+state.mix.output = 0
+state.mix.input = 0
+state.mix.monitor = 0
+state.mix.engine = 0
+state.mix.cut = 0
+state.mix.tape = 0
+state.mix.monitor_mode = 1
+state.mix.headphone_gain = 40
+state.mix.aux = 2
+state.mix.ins = 1
+state.clock = {}
+state.clock.source = 1
+state.clock.tempo = 90
+state.clock.link_quantum = 4
+state.clock.midi_out = 1
+state.clock.crow_out = 1
+state.clock.crow_out_div = 4
+state.clock.crow_in_div = 4
 
 -- read state.lua and set parameters back to stored vals.
 state.resume = function()
@@ -39,11 +58,6 @@ state.resume = function()
       norns.script.load()
     else
       norns.script.clear()
-      state.script=''
-      state.name = 'none'
-      state.shortname = 'none'
-      state.path = _path.code
-      state.data = _path.data
       norns.scripterror("NO SCRIPT")
     end
     -- reset clean_shutdown flag and save state so that
@@ -52,11 +66,6 @@ state.resume = function()
     state.save_state()
   else
     norns.script.clear()
-    state.script=''
-    state.name = 'none'
-    state.shortname = 'none'
-    state.path = _path.code
-    state.data = _path.data
     norns.scripterror("NO SCRIPT")
   end
 end
@@ -76,12 +85,28 @@ state.save_state = function()
   io.output(fd)
   io.write("-- norns system state\n")
   io.write("norns.state.clean_shutdown = " .. (state.clean_shutdown and "true" or "false") .. "\n")
-  io.write("norns.state.tape = " .. norns.state.tape .. "\n")
   io.write("norns.state.script = '" .. state.script .. "'\n")
   io.write("norns.state.name = '" .. state.name .. "'\n")
   io.write("norns.state.shortname = '" .. state.shortname .. "'\n")
   io.write("norns.state.path = '" .. state.path .. "'\n")
   io.write("norns.state.data = '" .. state.data .. "'\n")
+  io.write("norns.state.mix.output = " .. norns.state.mix.output .. "\n")
+  io.write("norns.state.mix.input = " .. norns.state.mix.input .. "\n")
+  io.write("norns.state.mix.monitor = " .. norns.state.mix.monitor .. "\n")
+  io.write("norns.state.mix.engine = " .. norns.state.mix.engine .. "\n")
+  io.write("norns.state.mix.cut = " .. norns.state.mix.cut .. "\n")
+  io.write("norns.state.mix.tape = " .. norns.state.mix.tape .. "\n")
+  io.write("norns.state.mix.aux = " .. norns.state.mix.aux .. "\n")
+  io.write("norns.state.mix.ins = " .. norns.state.mix.ins .. "\n")
+  io.write("norns.state.mix.monitor_mode = " .. norns.state.mix.monitor_mode .. "\n")
+  io.write("norns.state.mix.headphone_gain = " .. norns.state.mix.headphone_gain .. "\n")
+  io.write("norns.state.clock.source = " .. norns.state.clock.source .. "\n")
+  io.write("norns.state.clock.tempo = " .. norns.state.clock.tempo .. "\n")
+  io.write("norns.state.clock.link_quantum = " .. norns.state.clock.link_quantum .. "\n")
+  io.write("norns.state.clock.midi_out = " .. norns.state.clock.midi_out .. "\n")
+  io.write("norns.state.clock.crow_out = " .. norns.state.clock.crow_out .. "\n")
+  io.write("norns.state.clock.crow_out_div = " .. norns.state.clock.crow_out_div .. "\n")
+  io.write("norns.state.clock.crow_in_div = " .. norns.state.clock.crow_in_div .. "\n")
   for i=1,4 do
     io.write("midi.vports[" .. i .. "].name = '" .. midi.vports[i].name .. "'\n")
   end

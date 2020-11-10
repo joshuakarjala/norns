@@ -1,3 +1,6 @@
+--- Formatters
+-- @module formatters
+-- @alias Formatters
 local Formatters = {}
 
 local function format(param, value, units)
@@ -7,6 +10,8 @@ end
 
 -- Raw
 
+--- format_freq_raw
+-- @param freq
 function Formatters.format_freq_raw(freq)
   if freq < 0.1 then
     freq = util.round(freq, 0.001) .. " Hz"
@@ -20,53 +25,77 @@ function Formatters.format_freq_raw(freq)
   return freq
 end
 
+--- format_secs_raw
+-- @param secs
 function Formatters.format_secs_raw(secs)
-  if secs >= 100 then
-    secs = util.round(secs)
+  local out_string
+  if secs > 3600 then
+    out_string = util.round(secs / 60 / 60, 0.1) .. " h"
+  elseif secs >= 120 then
+    out_string = util.round(secs / 60, 0.1) .. " min"
+  elseif secs >= 60 then
+    out_string = util.round(secs) .. " s"
   elseif util.round(secs, 0.01) >= 1 then
-    secs = util.round(secs, 0.1)
+    out_string = util.round(secs, 0.1) .. " s"
   else
-    secs = util.round(secs, 0.01)
-    if string.len(secs) < 4 then secs = secs .. "0" end
+    out_string = util.round(secs, 0.01)
+    if string.len(out_string) < 4 then out_string = out_string .. "0" end
+    out_string = out_string .. " s"
   end
-  return secs .. " s"
+  return out_string
 end
 
 
 -- Params
 
+--- default
+-- @param param
 function Formatters.default(param)
   return Formatters.round(0.01)(param)
 end
 
+--- percentage
+-- @param param
 function Formatters.percentage(param)
   return format(param, util.round(param:get()*100), "%")
 end
 
+--- unipolar_as_percentage
+-- @param param
 function Formatters.unipolar_as_percentage(param)
   return format(param, util.round(param:get()*100), "%")
 end
 
+--- bipolar_as_percentage
+-- @param param
 function Formatters.bipolar_as_percentage(param)
   return format(param, util.round(param:get()*100), "%")
 end
 
+--- secs_as_ms
+-- @param param
 function Formatters.secs_as_ms(param)
   return format(param, util.round(param:get()*1000), "ms")
 end
 
+--- unipolar_as_true_false
+-- @param param
 function Formatters.unipolar_as_true_false(param)
   local str
   if param:get() == 1 then str = "true" else str = "false" end
   return format(param, str)
 end
 
+--- unipolar_as_enabled_disabled
+-- @param param
 function Formatters.unipolar_as_enabled_disabled(param)
   local str
   if param:get() == 1 then str = "enabled" else str = "disabled" end
   return format(param, str)
 end
 
+--- bipolar_as_pan_widget
+-- @param param
 function Formatters.bipolar_as_pan_widget(param)
   local dots_per_side = 10
   local widget
@@ -114,6 +143,8 @@ function Formatters.bipolar_as_pan_widget(param)
   return format(param, descr.." "..widget, "")
 end
 
+--- unipolar_as_multimode_filter_freq
+-- @param param
 function Formatters.unipolar_as_multimode_filter_freq(param)
   local chars = 20
   local widget
@@ -156,16 +187,22 @@ function Formatters.unipolar_as_multimode_filter_freq(param)
   return format(param, widget.." "..descr, "")
 end
 
+--- round
+-- @param precision
 function Formatters.round(precision)
   return function(param)
     return format(param, util.round(param:get(), precision))
   end
 end
 
+--- format_freq
+-- @param param
 function Formatters.format_freq(param)
   return Formatters.format_freq_raw(param:get())
 end
 
+--- format_secs
+-- @param param
 function Formatters.format_secs(param)
   return Formatters.format_secs_raw(param:get())
 end

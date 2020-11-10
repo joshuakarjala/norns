@@ -14,6 +14,8 @@ def options(opt):
     opt.load('compiler_c compiler_cxx boost')
     opt.add_option('--desktop', action='store_true', default=False)
     opt.add_option('--supercollider-prefix', action='store', default='/usr')
+    opt.add_option('--enable-ableton-link', action='store_true', default=True)
+    opt.add_option('--profile-matron', action='store_true', default=False)
 
 def configure(conf):
     conf.load('compiler_c compiler_cxx boost')
@@ -22,6 +24,8 @@ def configure(conf):
     conf.define('VERSION_MINOR', 0)
     conf.define('VERSION_PATCH', 0)
     conf.define('VERSION_HASH', get_version_hash())
+
+    conf.env.PROFILE_MATRON = conf.options.profile_matron
 
     conf.env.append_unique('CFLAGS', ['-std=gnu11', '-Wall', '-Wextra', '-Werror'])
     conf.env.append_unique('CFLAGS', ['-g'])
@@ -37,7 +41,7 @@ def configure(conf):
     conf.check_cfg(package='lua53', args=['--cflags', '--libs'])
     conf.check_cfg(package='nanomsg', args=['--cflags', '--libs'])
     conf.check_cfg(package='avahi-compat-libdns_sd', args=['--cflags', '--libs'])
-    conf.check_cfg(package='sndfile', args=['--cflags', '--libs'])	
+    conf.check_cfg(package='sndfile', args=['--cflags', '--libs'])
 
     conf.check_cc(msg='Checking for libmonome',
         define_name='HAVE_LIBMONOME',
@@ -54,18 +58,24 @@ def configure(conf):
         includes=[
             '{}/include/SuperCollider/plugin_interface'.format(conf.env.SC_PREFIX),
             '{}/include/SuperCollider/common'.format(conf.env.SC_PREFIX),
-	    '{}/sc/external_libraries/nova-simd'.format(top)
+            '{}/sc/external_libraries/nova-simd'.format(top)
         ],
         header_name='SC_PlugIn.h',
         uselib_store='SUPERCOLLIDER')
 
     conf.check_boost()
+
     if conf.options.desktop:
         conf.check_cfg(package='sdl2', args=['--cflags', '--libs'])
         conf.define('NORNS_DESKTOP', True)
 
+    conf.env.ENABLE_ABLETON_LINK = conf.options.enable_ableton_link
+    conf.define('HAVE_ABLETON_LINK', conf.options.enable_ableton_link)
+
 def build(bld):
     bld.recurse('matron')
+    bld.recurse('maiden-repl')
     bld.recurse('ws-wrapper')
     bld.recurse('sc')
     bld.recurse('crone')
+    bld.recurse('third-party')

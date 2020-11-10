@@ -10,18 +10,18 @@ def configure(conf):
 def build(bld):
     crone_sources = [
         'src/main.cpp',
-        'src/OscInterface.cpp',
+        'src/BufDiskWorker.cpp',
         'src/Commands.cpp',
         'src/MixerClient.cpp',
-        'src/SoftCutClient.cpp',
+        'src/OscInterface.cpp',
+        'src/SoftcutClient.cpp',
         'src/Taper.cpp',
         'src/Window.cpp',
-        'src/softcut/FadeCurves.cpp',
-        'src/softcut/SoftCutHead.cpp', 
-        'src/softcut/SoftCutVoice.cpp',
-        'src/softcut/SubHead.cpp',
-        'src/softcut/Svf.cpp',
-        'src/softcut/TestBuffers.cpp'
+        'softcut/softcut-lib/src/FadeCurves.cpp',
+        'softcut/softcut-lib/src/ReadWriteHead.cpp',
+        'softcut/softcut-lib/src/SubHead.cpp',
+        'softcut/softcut-lib/src/Svf.cpp',
+        'softcut/softcut-lib/src/Voice.cpp'
     ]
 
     bld.program( features='c cxx cxxprogram',
@@ -30,15 +30,17 @@ def build(bld):
 
                  includes=[
                      'src',
-                     './'
+                     './',
+                     'softcut/softcut-lib/include',
+                     'lib/readerwriterqueue'
                  ],
 
                  use=[
                      'ALSA',
                      'LIBLO',
-                     'BOOST',
                  ],
                  lib=[
+                     'atomic',
                      'jack',
                      'pthread',
                      'm',
