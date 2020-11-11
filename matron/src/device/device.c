@@ -1,18 +1,23 @@
 #include <assert.h>
 #include <errno.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <signal.h>
 
 #include "device.h"
 
-#define TEST_NULL_AND_FREE(p) if( (p) != NULL ) { free(p); }
+#define TEST_NULL_AND_FREE(p) \
+    if ((p) != NULL) {        \
+        free(p);              \
+    }
 
 // start the rx thread for a device
 static int dev_start(union dev *d);
 
-union dev *dev_new(device_t type, const char *path, const char *name) {
+union dev *dev_new(device_t type, const char *path, const char *name, bool multiport_device,
+                   unsigned int midi_port_index) {
+
     union dev *d = calloc(1, sizeof(union dev));
 
     if (d == NULL) {
@@ -21,12 +26,11 @@ union dev *dev_new(device_t type, const char *path, const char *name) {
 
     // initialize the base class
     d->base.type = type;
-    d->base.path = strdup(path);
-
-    d->base.name = (char *) name;
+    d->base.path = path ? strdup(path) : NULL;
+    d->base.name = (char *)name;
 
     // initialize the subclass
-    switch(type) {
+    switch (type) {
     case DEV_TYPE_MONOME:
         if (dev_monome_init(d) < 0) {
             goto err_init;
@@ -38,7 +42,17 @@ union dev *dev_new(device_t type, const char *path, const char *name) {
         }
         break;
     case DEV_TYPE_MIDI:
-        if (dev_midi_init(d) < 0) {
+        if (dev_midi_init(d, midi_port_index, multiport_device) < 0) {
+            goto err_init;
+        }
+        break;
+    case DEV_TYPE_MIDI_VIRTUAL:
+        if (dev_midi_virtual_init(d) < 0) {
+            goto err_init;
+        }
+        break;
+    case DEV_TYPE_CROW:
+        if (dev_crow_init(d) < 0) {
             goto err_init;
         }
         break;
@@ -48,8 +62,7 @@ union dev *dev_new(device_t type, const char *path, const char *name) {
         }
         break;
     default:
-        fprintf(stderr,
-            "calling device.c:dev_new() with unkmown device type; this is an error!");
+        fprintf(stderr, "calling device.c:dev_new() with unkmown device type; this is an error!");
         goto err_init;
     }
     // start the thread
@@ -98,13 +111,13 @@ int dev_start(union dev *d) {
     }
 
     ret = pthread_attr_init(&attr);
-    if(ret) {
+    if (ret) {
         fprintf(stderr, "m_init(): error on thread attributes \n");
         return -1;
     }
     ret = pthread_create(&d->base.tid, &attr, d->base.start, d);
     pthread_attr_destroy(&attr);
-    if(ret) {
+    if (ret) {
         fprintf(stderr, "m_init(): error creating thread\n");
         return -1;
     }

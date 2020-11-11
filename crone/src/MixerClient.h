@@ -11,6 +11,7 @@
 #include "Client.h"
 #include "Tape.h"
 #include "Utilities.h"
+#include "PeakMeter.h"
 
 #include "effects/StereoCompressor.h"
 #include "effects/ZitaReverb.h"
@@ -75,18 +76,20 @@ namespace  crone {
             LogRamp ext;
             LogRamp cut;
             LogRamp monitor;
+            LogRamp tape;
             // softcut input levels
             LogRamp adc_cut;
             LogRamp ext_cut;
+            LogRamp tape_cut;
             // aux send levels
             LogRamp monitor_aux;
             LogRamp cut_aux;
             LogRamp ext_aux;
+            LogRamp tape_aux;
             // FX return / mix levels
             LogRamp aux;
             LogRamp ins_mix;
-            // tape playback level
-            LogRamp tape;
+
             SmoothLevelList();
             void setSampleRate(float sr);
         };
@@ -109,16 +112,17 @@ namespace  crone {
         EnabledList enabled;
 
 
-    public:
-        struct VuLevels {
-            std::atomic<float> absPeakIn[2];
-            std::atomic<float> absPeakOut[2];
-            void clear();
-            void update(StereoBus &in, StereoBus &out, size_t numFrames);
-        };
+        PeakMeter inPeak[2];
+        PeakMeter outPeak[2];
 
-        VuLevels vuLevels;
-        VuLevels* getVuLevels() { return &vuLevels; }
+    public:
+        float getInputPeakPos(int ch) {
+            return inPeak[ch].getPos();
+        }
+
+        float getOutputPeakPos(int ch) {
+            return outPeak[ch].getPos();
+        }
 
         void openTapeRecord(const char* path) {
             tape.writer.open(path);
@@ -131,7 +135,6 @@ namespace  crone {
         void stopTapeRecord() {
             tape.writer.stop();
         }
-
 
         void openTapePlayback(const char* path) {
             tape.reader.open(path);

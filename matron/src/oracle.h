@@ -1,6 +1,6 @@
 #pragma once
-#include <stdarg.h>
 #include <lo/lo.h>
+#include <stdarg.h>
 #include <stdbool.h>
 /*
  * oracle.h
@@ -36,8 +36,6 @@ struct engine_param {
     char *name;
     int busIdx; // control bus index
 };
-
-
 
 // initialize
 extern void o_init();
@@ -90,7 +88,7 @@ extern void o_request_poll_report(void);
 extern void o_send_command(const char *name, lo_message msg);
 
 // start or stop a poll
-//extern void o_set_poll_state(const char *name, bool state);
+// extern void o_set_poll_state(const char *name, bool state);
 extern void o_set_poll_state(int idx, bool state);
 
 // set poll period
@@ -127,6 +125,7 @@ extern void o_tape_play_stop();
 //--- cut
 extern void o_set_level_adc_cut(float value);
 extern void o_set_level_ext_cut(float value);
+extern void o_set_level_tape_cut(float value);
 extern void o_set_level_cut_rev(float value);
 extern void o_set_level_cut_master(float value);
 extern void o_set_level_cut(int index, float value);
@@ -136,31 +135,34 @@ extern void o_set_pan_cut(int index, float value);
 extern void o_cut_enable(int i, float value);
 extern void o_cut_buffer_clear();
 extern void o_cut_buffer_clear_channel(int ch);
-extern void o_cut_buffer_clear_region(float start, float end);
-extern void o_cut_buffer_clear_region_channel(int ch, float start, float end);
-extern void o_cut_buffer_read_mono(char *file, float start_src, float start_dst,
-    float dur, int ch_src, int ch_dst);
-extern void o_cut_buffer_read_stereo(char *file, float start_src,
-    float start_dst, float dur);
-void o_cut_buffer_write_mono(char *file, float start, float dur, int ch);
-void o_cut_buffer_write_stereo(char *file, float start, float dur);
+extern void o_cut_buffer_clear_region(float start, float dur, float fade_time, float preserve);
+extern void o_cut_buffer_clear_region_channel(int ch, float start, float dur, float fade_time, float preserve);
+extern void o_cut_buffer_copy_mono(int src_ch, int dst_ch, float src_start, float dst_start, float dur, float fade_time, float preserve, int reverse);
+extern void o_cut_buffer_copy_stereo(float src_start, float dst_start, float dur, float fade_time, float preserve, int reverse);
+extern void o_cut_buffer_read_mono(char *file, float start_src, float start_dst, float dur, int ch_src, int ch_dst);
+extern void o_cut_buffer_read_stereo(char *file, float start_src, float start_dst, float dur);
+extern void o_cut_buffer_write_mono(char *file, float start, float dur, int ch);
+extern void o_cut_buffer_write_stereo(char *file, float start, float dur);
+extern void o_cut_buffer_render(int ch, float start, float dur, int samples);
+extern void o_cut_reset();
 // most softcut parameter changs take single voice index...
-extern void o_set_cut_param(const char* name, int voice, float value);
-extern void o_set_cut_param_ii(const char* name, int voice, int value);
-extern void o_set_cut_param_iif(const char* name, int a, int b, float v);
+extern void o_set_cut_param(const char *name, int voice, float value);
+extern void o_set_cut_param_ii(const char *name, int voice, int value);
+extern void o_set_cut_param_iif(const char *name, int a, int b, float v);
 
 //--- reverb controls
 extern void o_set_rev_on();
 extern void o_set_rev_off();
 extern void o_set_level_monitor_rev(float value);
 extern void o_set_level_ext_rev(float value);
+extern void o_set_level_tape_rev(float value);
 extern void o_set_level_rev_dac(float value);
-extern void o_set_rev_param(const char* name, float value);
+extern void o_set_rev_param(const char *name, float value);
 
 //--- compressor controls
 extern void o_set_comp_on();
 extern void o_set_comp_off();
 extern void o_set_comp_mix(float level);
-extern void o_set_comp_param(const char* name, float value);
+extern void o_set_comp_param(const char *name, float value);
 
 extern void o_restart_audio();

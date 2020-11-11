@@ -1,5 +1,6 @@
 --- Script class
--- @module script
+-- @classmod script
+-- @alias Script
 
 local Script = {}
 
@@ -7,6 +8,18 @@ local Script = {}
 -- ie redirect draw, key, enc functions, stop timers, clear engine, etc.
 Script.clear = function()
   print("# script clear")
+
+  -- script local state
+  local state = { }
+
+  setmetatable(_G, {
+    __index = function (_,k)
+      return state[k]
+    end,
+    __newindex = function(_,k,v)
+      state[k] = v
+    end,
+  })
 
   -- reset cleanup script
   cleanup = norns.none
@@ -17,6 +30,10 @@ Script.clear = function()
   -- redirect inputs to nowhere
   key = norns.none
   enc = norns.none
+
+  -- reset encoders
+  norns.enc.accel(0,true)
+  norns.enc.sens(0,1)
 
   -- clear, redirect, and reset devices
   grid.cleanup()
@@ -35,7 +52,6 @@ Script.clear = function()
 
   -- clear engine
   engine.name = nil
-  free_engine()
 
   -- clear softcut
   softcut.reset()
@@ -43,18 +59,33 @@ Script.clear = function()
   -- clear init
   init = norns.none
 
+  -- clear crow functions
+  crow.init()
+
   -- clear last run
   norns.state.script = ''
   norns.state.name = 'none'
   norns.state.shortname = 'none'
   norns.state.path = _path["dust"]
+  norns.state.data = _path.data
+  norns.state.lib = norns.state.path
 
   -- clear params
   params:clear()
+  norns.pmap.clear()
+  -- add audio menu
+  audio.add_params()
+  -- add clock menu
+  clock.add_params()
+  -- re-enable crow clock if needed
+  if params:string("clock_source") == "crow" then
+    crow.input[1].change = function() end
+    crow.input[1].mode("change",2,0.1,"rising")
+  end
 
   -- reset PLAY mode screen settings
   local status = norns.menu.status()
-  if status == true then s_restore() end
+  if status == true then _norns.screen_restore() end
 
   screen.aa(0)
   screen.level(15)
@@ -62,7 +93,7 @@ Script.clear = function()
   screen.font_face(1)
   screen.font_size(8)
 
-  if status == true then s_save() end
+  if status == true then _norns.screen_save() end
 
   -- ensure finalizers run before next script
   collectgarbage()
@@ -72,18 +103,17 @@ Script.init = function()
   print("# script init")
   params.name = norns.state.shortname
   init()
-  s_save()
+  _norns.screen_save()
 end
 
 --- load a script from the /scripts folder.
--- @param filename (string) - file to load. leave blank to reload current file.
+-- @tparam string filename file to load. leave blank to reload current file.
 Script.load = function(filename)
+  local name, path, relative
   if filename == nil then
     filename = norns.state.script
     name = norns.state.name
-    shortname = norns.state.name:match("([^/]+)$")
     path = norns.state.path
-    data = norns.state.data
   else
 	if string.sub(filename,1,1) == "/" then
 	  relative = string.sub(filename,string.len(_path["dust"]))
@@ -107,25 +137,23 @@ Script.load = function(filename)
 
   print("# script load: " .. filename)
 
-  -- script local state
-  local state = { }
-
-  setmetatable(_G, {
-    __index = function (t,k)
-      return state[k]
-    end,
-    __newindex = function(t,k,v)
-      state[k] = v
-    end,
-  })
-
   local f=io.open(filename,"r")
   if f==nil then
     print("file not found: "..filename)
   else
     io.close(f)
-    if pcall(cleanup) then print("# cleanup")
-    else print("### cleanup failed") end
+    local ok, err
+    ok, err = pcall(cleanup)
+    if ok then print("# cleanup")
+    else
+      print("### cleanup failed with error: "..err)
+    end
+
+    -- unload asl package entry so `require 'asl'` works
+    -- todo(pq): why is this not needed generally (e.g., for 'ui', 'util', etc.)?
+    if package.loaded['asl'] ~= nil then
+      package.loaded['asl'] = nil
+    end
 
     Script.clear() -- clear script variables and functions
 
@@ -133,6 +161,7 @@ Script.load = function(filename)
     norns.state.name = name
     norns.state.shortname = norns.state.name:match( "([^/]+)$" )
     norns.state.path = path .. '/'
+    norns.state.lib = path .. '/lib/'
     norns.state.data = _path.data .. name .. '/'
 
     if util.file_exists(norns.state.data) == false then
@@ -162,11 +191,12 @@ Script.run = function()
   else
     engine.load("None", Script.init)
   end
+  norns.pmap.read() -- load parameter map
 end
 
 --- load script metadata.
--- @param filename file to load
--- @return meta table with metadata
+-- @tparam string filename file to load
+-- @treturn table meta table with metadata
 Script.metadata = function(filename)
   local meta = {}
   local f=io.open(filename,"r")
@@ -176,7 +206,9 @@ Script.metadata = function(filename)
     io.close(f)
     for line in io.lines(filename) do
       if util.string_starts(line,"--") then
-        table.insert(meta, string.sub(line,4,-1))
+        local skip_hyphens = string.sub(line,4,-1)
+        local fix_newlines = string.gsub(skip_hyphens,"\r$","")
+        table.insert(meta, fix_newlines)
       else
         if #meta == 0 then
           table.insert(meta, "no script information")

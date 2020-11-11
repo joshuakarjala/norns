@@ -36,17 +36,17 @@ extern void w_handle_arc_encoder_key(int id, int number, int state);
 
 extern void w_handle_hid_add(void *dev);
 extern void w_handle_hid_remove(int id);
-extern void w_handle_hid_event(int id, uint8_t type, dev_code_t code,
-                               int val);
+extern void w_handle_hid_event(int id, uint8_t type, dev_code_t code, int val);
 
 extern void w_handle_midi_add(void *dev);
 extern void w_handle_midi_remove(int id);
 extern void w_handle_midi_event(int id, uint8_t *data, size_t nbytes);
 
-extern void w_handle_osc_event(char *from_host,
-                               char *from_port,
-                               char *path,
-                               lo_message msg);
+extern void w_handle_crow_add(void *dev);
+extern void w_handle_crow_remove(int id);
+extern void w_handle_crow_event(void *dev, int id);
+
+extern void w_handle_osc_event(char *from_host, char *from_port, char *path, lo_message msg);
 
 extern void w_handle_push2_add(void *dev);
 extern void w_handle_push2_remove(int id);
@@ -79,6 +79,8 @@ extern void w_handle_metro(const int idx, const int stage);
 
 //--- clock
 extern void w_handle_clock_resume(const int thread_id);
+extern void w_handle_clock_start();
+extern void w_handle_clock_stop();
 
 //--- crone poll handlers
 extern void w_handle_poll_value(int idx, float val);
@@ -86,6 +88,7 @@ extern void w_handle_poll_data(int idx, int size, uint8_t *data);
 extern void w_handle_poll_wave(int idx, uint8_t *data);
 extern void w_handle_poll_io_levels(uint8_t *levels);
 extern void w_handle_poll_softcut_phase(int idx, float val);
+extern void w_handle_softcut_render(int idx, float sec_per_sample, float start, size_t size, float* data);
 
 extern void w_handle_engine_loaded();
 
@@ -93,5 +96,6 @@ extern void w_handle_engine_loaded();
 extern void w_handle_startup_ready_ok();
 extern void w_handle_startup_ready_timeout();
 
-
 extern void* luaState();
+// util callbacks
+extern void w_handle_system_cmd();

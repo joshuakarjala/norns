@@ -1,5 +1,5 @@
 --- Engine class
--- @module engine
+-- @classmod engine
 -- @alias Engine
 local tab = require 'tabutil'
 
@@ -13,6 +13,8 @@ Engine.names = {}
 Engine.name = nil
 -- current command table
 Engine.commands = {}
+-- flag if there is a load request pending
+Engine.is_loading = false
 
 -- ----------------------------
 -- static methods
@@ -56,7 +58,7 @@ Engine.add_command = function(id, name, fmt)
     if select("#",...) ~= #fmt then
    print("warning: wrong count of arguments for command '"..name.."'")
     end
-    send_command(id, table.unpack(arg))
+    _norns.send_command(id, table.unpack(arg))
   end
   Engine.commands[name] = {
     id = id,
@@ -66,6 +68,7 @@ Engine.add_command = function(id, name, fmt)
   }
 end
 
+--- print all commands reported from the engine
 Engine.list_commands = function()
   print("___ engine commands ___")
   local sorted = tab.sort(Engine.commands)
@@ -77,15 +80,34 @@ end
 --- load a named engine, with a callback.
 -- @param name - name of engine
 -- @param callback - function to call on engine load. will receive command list
+-- @return - false if an engine load is already pending (nothing happens), true otherwise
 Engine.load = function(name, callback)
-  if type(callback) == 'function' then
-    norns.report.did_engine_load = function()
-      local status = norns.try(callback,"init")
-      norns.init_done(status)
+  if engine.is_loading then
+    return false
+  else
+    if type(callback) == 'function' then
+      _norns.report.did_engine_load = function()	    
+        Engine.is_loading = false
+        local status = norns.try(callback,"init")
+        norns.init_done(status)
+      end
+    else
+      _norns.report.did_engine_load = function()
+        Engine.is_loading = false
+        norns.init_done(true)
+      end
     end
-  else norns.init_done(true)
+
+    if #Engine.names==0 or tab.contains(Engine.names, name)==true then
+      Engine.name = name
+      Engine.is_loading = true
+      _norns.load_engine(name)
+      return true
+    else
+      norns.scripterror("missing "..name)
+      return false
+    end
   end
-  load_engine(name)
 end
 
 --- custom getters.

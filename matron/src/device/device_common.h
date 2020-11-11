@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdint.h>
+
 typedef enum {
     // libmonome devices
     DEV_TYPE_MONOME = 0,
@@ -9,10 +11,17 @@ typedef enum {
     DEV_TYPE_MIDI = 2,
     // push2 devices
     DEV_TYPE_PUSH2 = 3,
+    // usbmodem (crow)
+    DEV_TYPE_CROW = 3,
+    // place all virtual devices (devices without device files to monitor) below
+    DEV_TYPE_MIDI_VIRTUAL = 4,
     // counter - unused, don't remove
     DEV_TYPE_COUNT,
     DEV_TYPE_INVALID
 } device_t;
+
+// maximum device_t value for devices which have corresponding device files
+#define DEV_TYPE_COUNT_PHYSICAL 4
 
 struct dev_common {
     // device type
@@ -28,7 +37,7 @@ struct dev_common {
     // human readable string
     char *name;
     // start function for pthread_create
-    void * (*start)(void *self);
+    void *(*start)(void *self);
     // stop function
     void (*deinit)(void *self);
 };

@@ -6,25 +6,28 @@
 #include <unistd.h>
 
 #include "args.h"
+#include "battery.h"
+#include "clock.h"
+#include "clocks/clock_crow.h"
+#include "clocks/clock_internal.h"
+#include "clocks/clock_link.h"
+#include "clocks/clock_midi.h"
 #include "device.h"
-#include "device_list.h"
 #include "device_hid.h"
+#include "device_list.h"
+#include "device_midi.h"
 #include "device_monitor.h"
 #include "device_monome.h"
-#include "device_midi.h"
 #include "events.h"
-#include "battery.h"
 #include "gpio.h"
 #include "hello.h"
 #include "i2c.h"
 #include "input.h"
-#include "osc.h"
 #include "metro.h"
+#include "osc.h"
 #include "screen.h"
 #include "stat.h"
-#include "clock.h"
-#include "clocks/clock_internal.h"
-#include "clocks/clock_midi.h"
+#include "watch.h"
 
 #include "oracle.h"
 #include "weaver.h"
@@ -41,6 +44,7 @@ void cleanup(void) {
     screen_deinit();
     battery_deinit();
     stat_deinit();
+    watch_deinit();
 
     fprintf(stderr, "matron shutdown complete\n");
     exit(0);
@@ -67,13 +71,21 @@ int main(int argc, char **argv) {
     i2c_init();
     osc_init();
     clock_init();
-    clock_internal_start();
+    clock_internal_init();
     clock_midi_init();
+    clock_crow_init();
+#if HAVE_ABLETON_LINK
+    clock_link_start();
+#endif
+
+    watch_init();
 
     o_init(); // oracle (audio)
 
     w_init(); // weaver (scripting)
+
     dev_list_init();
+    dev_list_add(DEV_TYPE_MIDI_VIRTUAL, NULL, "virtual");
     dev_monitor_init();
 
     // now is a good time to set our cleanup
@@ -91,7 +103,6 @@ int main(int argc, char **argv) {
 
 void print_version(void) {
     printf("MATRON\n");
-    printf("norns version: %d.%d.%d\n",
-           VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH);
+    printf("norns version: %d.%d.%d\n", VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH);
     printf("git hash: %s\n\n", VERSION_HASH);
 }

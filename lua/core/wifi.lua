@@ -6,6 +6,7 @@ local util = require "util"
 --
 
 local HOTSPOT = "Hotspot"
+local hotspot_password = "nnnnnnnn"
 
 --
 -- common functions
@@ -46,7 +47,7 @@ local function get_status(info)
 end
 
 local function get_ip4(info)
-  value = info["IP4.ADDRESS[1]"]
+  local value = info["IP4.ADDRESS[1]"]
   if value ~= nil then
     local p = value:find("/")
     if p ~= nil then p = p - 1 end
@@ -191,7 +192,7 @@ function Wifi.hotspot()
   print("activating hotspot")
   Wifi.ensure_radio_is_on()
   os.execute("nmcli c delete Hotspot")
-  os.execute("nmcli dev wifi hotspot ifname wlan0 ssid norns password nnnnnnnn")
+  os.execute("nmcli dev wifi hotspot ifname wlan0 ssid $(hostname) password " .. hotspot_password)
 end
 
 function Wifi.on(connection)
